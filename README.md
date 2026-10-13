@@ -35,7 +35,7 @@ dotnet run --project src/TaskManager.Api
 | # | Konu | Durum |
 |---|---|---|
 | 00 | [Proje iskeleti](docs/00-proje-iskeleti.md) | ✅ |
-| 01 | İlk Web API (Task CRUD) | ⏳ |
+| 01 | [İlk Web API (Task CRUD)](docs/01-ilk-web-api.md) | ✅ |
 | 02 | PostgreSQL + EF Core | ⏳ |
 | 03 | Katmanlı mimari, DTO | ⏳ |
 | 04 | Validasyon ve hata yönetimi | ⏳ |
