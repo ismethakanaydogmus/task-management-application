@@ -1,0 +1,37 @@
+# Geliştirme ortamı servisleri.
+# Kullanım:  docker compose up -d     (arka planda başlat)
+#            docker compose down      (durdur; veriler volume'da kalır)
+#            docker compose down -v   (durdur ve VERİLERİ SİL)
+
+services:
+  db:
+    # Sürümü sabitliyoruz: "postgres:latest" yazsaydık bir gün yeni ana sürüm inince
+    # mevcut veri klasörü uyumsuz olabilir ve container açılmayabilirdi.
+    # alpine = küçük boyutlu imaj.
+    image: postgres:17-alpine
+    container_name: taskmanager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-taskmanager}
+      POSTGRES_USER: ${POSTGRES_USER:-taskmanager}
+      # Şifre .env dosyasından gelir (.env git'e girmez). Tanımlı değilse compose hata verir (":?").
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env dosyasinda tanimli olmali}
+    ports:
+      # "BİLGİSAYAR_PORTU:CONTAINER_PORTU"
+      # Container içinde Postgres 5432'de çalışır. Bilgisayarda 5432'yi yerel PostgreSQL kurulumu
+      # kullandığı için dışarıya 5433 olarak açıyoruz (port çakışmasını önler).
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # Named volume: container silinse bile veriler burada kalır.
+      # Volume olmasaydı "docker compose down" ile tüm görevler silinirdi.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Container "çalışıyor" olabilir ama Postgres bağlantı kabul etmeye henüz hazır olmayabilir.
+      # Healthcheck gerçekten hazır olup olmadığını kontrol eder (Aşama 10'da API container'ı bunu bekleyecek).
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

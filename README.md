@@ -22,12 +22,49 @@ gorev_yonetim_uygulamasi/
 └── README.md
 ```
 
+## İlk kurulum (yeni bir bilgisayarda bir kez)
+
+Gerekenler: .NET 10 SDK, Docker Desktop, Node.js (frontend için).
+
+```bash
+# 1) Ortam değişkenleri: örnek dosyayı kopyala, POSTGRES_PASSWORD'ü değiştir
+cp .env.example .env
+
+# 2) Veritabanını başlat (Docker'da PostgreSQL, bilgisayarda 5433 portu)
+docker compose up -d
+
+# 3) Backend araçları (dotnet-ef) ve connection string (.env'deki değerlerle aynı olmalı)
+cd backend
+dotnet tool restore
+dotnet user-secrets set "ConnectionStrings:Default" \
+  "Host=localhost;Port=5433;Database=taskmanager;Username=taskmanager;Password=<.env'deki şifre>" \
+  --project src/TaskManager.Api
+
+# 4) Tabloları oluştur
+dotnet ef database update --project src/TaskManager.Api
+```
+
 ## Çalıştırma
 
 ```bash
+docker compose up -d          # veritabanı çalışmıyorsa
 cd backend
 dotnet run --project src/TaskManager.Api
-# -> http://localhost:5263/openapi/v1.json
+# -> http://localhost:5263/api/tasks
+```
+
+## Sık kullanılan komutlar
+
+```bash
+# Model değişti → yeni migration
+dotnet ef migrations add <Isim> --project src/TaskManager.Api --output-dir Data/Migrations
+dotnet ef database update --project src/TaskManager.Api
+
+# Veritabanına psql ile bağlan
+docker exec -it taskmanager-db psql -U taskmanager -d taskmanager
+
+# Veritabanını tamamen sıfırla (TÜM VERİ SİLİNİR)
+docker compose down -v && docker compose up -d && dotnet ef database update --project src/TaskManager.Api
 ```
 
 ## Ders notları
@@ -36,7 +73,7 @@ dotnet run --project src/TaskManager.Api
 |---|---|---|
 | 00 | [Proje iskeleti](docs/00-proje-iskeleti.md) | ✅ |
 | 01 | [İlk Web API (Task CRUD)](docs/01-ilk-web-api.md) | ✅ |
-| 02 | PostgreSQL + EF Core | ⏳ |
+| 02 | [PostgreSQL + EF Core](docs/02-postgresql-ef-core.md) | ✅ |
 | 03 | Katmanlı mimari, DTO | ⏳ |
 | 04 | Validasyon ve hata yönetimi | ⏳ |
 | 05 | React + Vite + TypeScript | ⏳ |

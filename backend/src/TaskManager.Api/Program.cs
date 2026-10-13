@@ -8,6 +8,8 @@
 // =====================================================================
 
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
+using TaskManager.Api.Data;
 using TaskManager.Api.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -28,11 +30,27 @@ builder.Services
     });
 builder.Services.AddOpenApi();       // /openapi/v1.json adresinde API dokümanı üretir
 
-// "ITaskRepository isteyen herkese InMemoryTaskRepository ver."
-// SINGLETON: veri bu nesnenin içinde (RAM'de) duruyor. Scoped olsaydı her HTTP isteğinde
-// yeni ve BOŞ bir repository oluşur, eklediğimiz görevler bir sonraki istekte kaybolurdu.
-// Aşama 2'de bu satır AddScoped<ITaskRepository, EfTaskRepository>() olacak.
-builder.Services.AddSingleton<ITaskRepository, InMemoryTaskRepository>();
+// Veritabanı bağlantısı.
+// Connection string'i "ConnectionStrings:Default" anahtarından okur. Değer kodda/appsettings'te DEĞİL:
+//  - Geliştirmede: dotnet user-secrets (proje klasörü dışında saklanır, git'e girmez)
+//  - Canlıda:      ortam değişkeni ConnectionStrings__Default  (":" yerine "__")
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException(
+        "ConnectionStrings:Default bulunamadı. 'dotnet user-secrets set \"ConnectionStrings:Default\" \"...\"' ile ayarla.");
+
+// AddDbContext, AppDbContext'i varsayılan olarak SCOPED kaydeder (her HTTP isteğine bir tane).
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options
+        .UseNpgsql(connectionString)
+        // C#'ta "CreatedAt" → Postgres'te "created_at".
+        // Postgres büyük harfli isimleri ancak tırnakla ("CreatedAt") tanır; elle SQL yazarken
+        // her seferinde tırnak koymak zorunda kalmamak için snake_case kullanıyoruz.
+        .UseSnakeCaseNamingConvention());
+
+// Aşama 1'de: AddSingleton<ITaskRepository, InMemoryTaskRepository>()
+// Artık veri veritabanında; repository durum (state) tutmuyor, Scoped DbContext kullanıyor → SCOPED.
+// Controller'da TEK SATIR değişmedi. Interface'e bağımlı olmanın faydası budur.
+builder.Services.AddScoped<ITaskRepository, EfTaskRepository>();
 
 var app = builder.Build();
 
