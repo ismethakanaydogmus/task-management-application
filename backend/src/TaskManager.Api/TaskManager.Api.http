@@ -1,0 +1,5 @@
+@baseUrl = http://localhost:5263
+
+### OpenAPI dokümanı (sadece Development ortamında açık)
+GET {{baseUrl}}/openapi/v1.json
+Accept: application/json

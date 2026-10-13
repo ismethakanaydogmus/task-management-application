@@ -1,0 +1,6 @@
+# Git, metin dosyalarını depoda LF olarak saklasın; checkout'ta işletim sistemine göre çevirsin.
+# Böylece Windows/Mac/Linux kullanan geliştiriciler arasında "her satır değişti" diff'leri oluşmaz.
+* text=auto
+
+# Shell script'ler Linux container'da çalışacağı için her zaman LF olmalı (CRLF ile "bad interpreter" hatası verir)
+*.sh text eol=lf
