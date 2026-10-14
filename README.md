@@ -6,7 +6,9 @@ Kullanıcıların kayıt olup kendi görevlerini oluşturduğu, filtreleyip arad
 Amaç basit bir "to-do" listesinin ötesine geçip **gerçek bir üretim uygulamasında beklenen** mimari, güvenlik,
 test ve dağıtım pratiklerini uçtan uca uygulamak.
 
-**🔗 Canlı demo:** _yakında_
+**🔗 Canlı demo:** https://task-management-ismet.azurewebsites.net
+
+> Ücretsiz Azure planında barındırıldığı için uygulama bir süre kullanılmayınca uyku moduna geçer; ilk açılış 10–20 saniye sürebilir.
 
 ---
 
