@@ -1,0 +1,90 @@
+# CI (Continuous Integration): Her push'ta ve pull request'te kodu TEMİZ bir makinede derle ve test et.
+# "Bende çalışıyor"u ortadan kaldırır; kırık kod ana dala girmeden yakalanır.
+# (GitHub'da Settings → Branches → "Require status checks" ile bu kontroller geçmeden PR birleştirilemez.)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Aynı dala art arda push edilirse eski (artık anlamsız) çalıştırmayı iptal et → boşa dakika harcama.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# En az yetki ilkesi: workflow sadece kodu okuyabilsin.
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------ Backend
+  backend:
+    name: Backend (build + unit + integration)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      # NuGet paketlerini önbelleğe al: sonraki çalıştırmalarda restore saniyeler sürer.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('backend/**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet restore
+      # Uyarıları hata say: CI'da "0 uyarı" kuralı, uyarıların birikip görmezden gelinmesini önler.
+      - run: dotnet build --no-restore --configuration Release -warnaserror
+
+      - name: Unit tests
+        run: dotnet test tests/TaskManager.UnitTests --no-build --configuration Release
+
+      # GitHub'ın ubuntu runner'larında Docker hazır → Testcontainers gerçek PostgreSQL'i açabilir.
+      - name: Integration tests (Testcontainers PostgreSQL)
+        run: dotnet test tests/TaskManager.IntegrationTests --no-build --configuration Release
+
+  # ------------------------------------------------------------------ Frontend
+  frontend:
+    name: Frontend (lint + test + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # npm ci: package-lock.json'daki BİREBİR sürümler (npm install lock dosyasını değiştirebilir).
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # tsc -b (tip kontrolü) + vite build
+      - run: npm run build
+
+  # ------------------------------------------------------------------ Docker
+  # Image'lar hâlâ build edilebiliyor mu? (Dockerfile'ı bozan bir değişiklik, ör. yeni proje eklenip
+  # COPY satırı unutulması, burada yakalanır.) Bu örnekte image'lar bir registry'ye GÖNDERİLMİYOR.
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    needs: [backend, frontend] # testler geçmeden image build etmeye gerek yok
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build API image
+        run: docker build --target final -t taskmanager-api:ci backend
+      - name: Build migrator image
+        run: docker build --target migrator -t taskmanager-migrator:ci backend
+      - name: Build web image
+        run: docker build -t taskmanager-web:ci frontend

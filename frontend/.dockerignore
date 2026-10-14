@@ -1,0 +1,6 @@
+# Build bağlamına gönderilmeyecekler. node_modules özellikle önemli:
+# Windows'ta kurulmuş paketler (native binary'ler) Linux container'da çalışmaz ve bağlamı yüzlerce MB şişirir.
+node_modules
+dist
+.env.*.local
+*.log

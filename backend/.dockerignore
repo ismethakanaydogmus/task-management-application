@@ -1,0 +1,13 @@
+# Docker build bağlamına (context) GÖNDERİLMEYECEKLER.
+# Neden önemli?
+#  - bin/obj: Windows'ta derlenmiş çıktılar Linux build'ini bozabilir ve bağlamı şişirir.
+#  - Gizli dosyalar image'a yanlışlıkla kopyalanmasın.
+#  - Bağlam küçüldükçe build hızlanır.
+**/bin/
+**/obj/
+**/*.user
+**/.vs/
+**/.vscode/
+tests/
+*.http
+**/appsettings.Development.json

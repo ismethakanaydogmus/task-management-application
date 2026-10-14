@@ -20,11 +20,17 @@ gorev_yonetim_uygulamasi/
 │   │   ├── TaskManager.Application/     # Service'ler, DTO'lar, interface'ler
 │   │   ├── TaskManager.Infrastructure/  # EF Core, PostgreSQL, migration'lar
 │   │   └── TaskManager.Api/             # Controller'lar, Program.cs (composition root)
-│   └── tests/
-│       ├── TaskManager.UnitTests/         # xUnit, fake bağımlılıklar, FakeTimeProvider
-│       └── TaskManager.IntegrationTests/  # WebApplicationFactory + Testcontainers (gerçek PostgreSQL)
-├── frontend/             # React uygulaması (Aşama 5)
+│   ├── tests/
+│   │   ├── TaskManager.UnitTests/         # xUnit, fake bağımlılıklar, FakeTimeProvider
+│   │   └── TaskManager.IntegrationTests/  # WebApplicationFactory + Testcontainers (gerçek PostgreSQL)
+│   └── Dockerfile        # multi-stage: build → migrator (EF bundle) → final (runtime, root olmayan)
+├── frontend/             # React + Vite + TypeScript
+│   ├── Dockerfile        # multi-stage: Node build → nginx (root olmayan)
+│   └── nginx.conf        # statik dosyalar + /api reverse proxy + güvenlik başlıkları
 ├── docs/                 # Her aşamanın ders notu (neden/alternatif/sorun/mülakat)
+├── .github/workflows/ci.yml   # her push'ta build + test + lint + docker build
+├── docker-compose.yml         # geliştirme: sadece PostgreSQL
+├── docker-compose.prod.yml    # production benzeri: db + migrator + api + web
 └── README.md
 ```
 
@@ -54,7 +60,20 @@ dotnet user-secrets set "Jwt:SigningKey" "$(openssl rand -base64 64)" --project 
 dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
 ```
 
-## Çalıştırma
+## Production benzeri çalıştırma (sadece Docker gerekir)
+
+```bash
+cp .env.example .env     # POSTGRES_PASSWORD ve JWT_SIGNING_KEY'i değiştir (openssl rand -base64 64)
+docker compose -f docker-compose.prod.yml up -d --build
+# -> http://localhost:8080   (nginx: frontend + /api reverse proxy; DB ve API dışarıya kapalı)
+
+docker compose -f docker-compose.prod.yml logs -f api   # JSON loglar
+docker compose -f docker-compose.prod.yml down          # durdur (veri volume'da kalır)
+```
+
+Başlatma sırası: `db` (healthy) → `migrator` (migration'ları uygular, çıkar) → `api` (healthy) → `web`.
+
+## Geliştirme ortamında çalıştırma
 
 ```bash
 # Backend (terminal 1)
@@ -114,4 +133,4 @@ docker compose down -v && docker compose up -d && dotnet ef database update --pr
 | 07 | [JWT kimlik doğrulama](docs/07-jwt-kimlik-dogrulama.md) | ✅ |
 | 08 | [Kullanıcıya özel veri, filtreleme, sayfalama](docs/08-kullaniciya-ozel-veri-sayfalama.md) | ✅ |
 | 09 | [Test](docs/09-test.md) | ✅ |
-| 10 | Docker ve deploy | ⏳ |
+| 10 | [Docker, production ve CI](docs/10-docker-deploy-ci.md) | ✅ |

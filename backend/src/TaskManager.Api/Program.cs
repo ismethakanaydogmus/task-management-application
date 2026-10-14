@@ -11,6 +11,9 @@ using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
+using TaskManager.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
 using TaskManager.Api.Auth;
 using TaskManager.Api.Controllers;
@@ -146,10 +149,52 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+// ---------- HEALTH CHECKS (Aşama 10) ----------
+// Docker / Kubernetes / load balancer "bu container sağlıklı mı?" diye bu endpoint'lere bakar.
+//  - /health/live  : süreç ayakta ve istek işleyebiliyor mu? (hiçbir bağımlılığı kontrol ETMEZ)
+//  - /health/ready : trafiğe hazır mı? (veritabanına bağlanabiliyor mu?)
+// Ayrım neden önemli? DB kısa süre kopunca "live" başarısız olsaydı orkestratör sağlıklı API'yi boş yere
+// yeniden başlatırdı (restart döngüsü). DB sorunu "ready"yi düşürür: trafik kesilir ama container öldürülmez.
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<AppDbContext>("database", tags: ["ready"]);
+
+// ---------- REVERSE PROXY (Aşama 10) ----------
+// Production'da API'nin önünde nginx var: tarayıcı → nginx (HTTPS, gerçek IP) → API (HTTP, nginx'in IP'si).
+// Forwarded headers olmadan API her isteği nginx'ten gelmiş sanar:
+//  - RemoteIpAddress hep nginx → rate limiting TÜM kullanıcıları tek kişi sayar (10 kişi giriş yapınca herkes 429)
+//  - Request.Scheme hep "http" → HTTPS'e dair kararlar yanlış olur
+// nginx gerçek değerleri X-Forwarded-For / X-Forwarded-Proto başlıklarına yazar; bu middleware onları okur.
+var behindProxy = builder.Configuration.GetValue("ReverseProxy:Enabled", false);
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+
+    // GÜVEN SORUSU: Varsayılan olarak sadece localhost'tan gelen başlıklara güvenilir. nginx ayrı bir container'da
+    // (IP'si Docker ağında dinamik) olduğu için listeyi temizliyoruz. Bu SADECE API portu dışarıya kapalıyken güvenlidir
+    // (docker-compose.prod.yml'de API'nin portu yayınlanmıyor, ona sadece nginx ulaşabiliyor).
+    // API doğrudan internete açık olsaydı herkes sahte "X-Forwarded-For: 1.2.3.4" göndererek rate limit'i atlatırdı.
+    // ForwardLimit = 1 (varsayılan): zincirin sadece en SAĞDAKİ değeri (nginx'in eklediği gerçek IP) dikkate alınır;
+    // istemcinin kendi gönderdiği sahte değerler soldaki kısımda kalır ve yok sayılır.
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// Production'da loglar JSON: Docker/Kubernetes log toplayıcıları (Loki, Elasticsearch, CloudWatch)
+// alanları (seviye, mesaj, traceId...) ayrıştırabilsin. Geliştirmede okunur, renkli konsol kalıyor.
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Logging.ClearProviders();
+    builder.Logging.AddJsonConsole();
+}
+
 var app = builder.Build();
 
 // ---------- 2) MIDDLEWARE PIPELINE (sıra ÖNEMLİ!) ----------
 // Her istek yukarıdan aşağı akar, yanıt aşağıdan yukarı geri döner.
+
+// Reverse proxy arkasındaysak İLK İŞ gerçek IP/şemayı geri yükle: sonraki her şey (log, rate limit) doğru değeri görsün.
+if (behindProxy)
+    app.UseForwardedHeaders();
 
 // EN BAŞTA: altındaki tüm middleware'lerde ve controller'larda oluşan exception'ları yakalar.
 // Sonda olsaydı, kendisinden önce çalışan middleware'lerin hatalarını göremezdi.
@@ -166,7 +211,10 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi().AllowAnonymous(); // fallback policy'den muaf: dokümanı görmek için giriş gerekmesin
 }
 
-app.UseHttpsRedirection();   // http:// gelen isteği https://'e yönlendirir
+// http:// gelen isteği https://'e yönlendirir. Proxy arkasında bu iş PROXY'nin (TLS orada sonlanır);
+// API'nin kendisi container içinde sadece HTTP dinler.
+if (!behindProxy)
+    app.UseHttpsRedirection();
 
 // CORS, routing'den sonra ve Authorization'dan ÖNCE gelmeli:
 // tarayıcının preflight (OPTIONS) isteğine, yetki kontrolüne takılmadan cevap verilebilmesi için.
@@ -180,6 +228,10 @@ app.UseAuthorization();      // Fallback policy / [Authorize] / [AllowAnonymous]
 app.UseRateLimiter();        // [EnableRateLimiting] olan endpoint'lerde istek sayısını sınırla
 
 app.MapControllers();        // URL'yi doğru controller action'ına eşler (routing)
+
+// Health endpoint'leri giriş gerektirmez (fallback policy'den muaf); orkestratörün token'ı yok.
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") }).AllowAnonymous();
 
 app.Run();
 

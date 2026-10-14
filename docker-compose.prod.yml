@@ -1,0 +1,92 @@
+# =============================================================================
+# PRODUCTION benzeri tam sistem: veritabanı + migration + API + web (nginx)
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   → http://localhost:8080
+#
+# Gerekenler: SADECE Docker. (.NET SDK, Node, user-secrets GEREKMEZ.)
+# Ayarlar/secret'lar kök dizindeki .env dosyasından gelir (bkz. .env.example).
+#
+# Geliştirme compose'undan (docker-compose.yml) farkı: ayrı proje adı → ayrı container'lar ve AYRI volume.
+# İkisi aynı anda çalışabilir; geliştirme veritabanına dokunulmaz.
+# =============================================================================
+name: taskmanager-prod
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-taskmanager}
+      POSTGRES_USER: ${POSTGRES_USER:-taskmanager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD .env dosyasinda tanimli olmali}
+    # PORT YAYINLANMIYOR: veritabanına sadece Docker'ın iç ağındaki servisler (migrator, api) ulaşabilir.
+    # İnternete açık bir veritabanı portu en sık yapılan güvenlik hatalarından biridir.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Migration'ları uygular ve ÇIKAR (uzun süre çalışan bir servis değil, tek seferlik bir "iş").
+  # Neden API açılırken Migrate() değil?
+  #  - API'den 3 kopya çalışsaydı üçü aynı anda migration uygulamaya çalışırdı (yarış).
+  #  - Migration başarısız olursa API HİÇ başlamaz (aşağıdaki depends_on) → bozuk şemayla çalışan uygulama olmaz.
+  #  - API'nin veritabanı kullanıcısına şema değiştirme (DDL) yetkisi vermek gerekmez (gerçek sistemde ayrı kullanıcılar).
+  migrator:
+    build:
+      context: ./backend
+      target: migrator
+    environment:
+      # "GSS Encryption Mode=Disable": Npgsql varsayılan olarak Kerberos (GSS) şifrelemesini dener; bunun için
+      # libgssapi kütüphanesi gerekir ve Microsoft'un küçük .NET image'larında YOK → her bağlantıda log'a
+      # "libgssapi_krb5.so.2: cannot open shared object file" hatası düşer. Kerberos kullanmadığımız için kapatıyoruz.
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-taskmanager};Username=${POSTGRES_USER:-taskmanager};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+      target: final
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # appsettings.json'daki değerleri ezer. ":" yerine "__" (ortam değişkenlerinde ":" kullanılamaz).
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=${POSTGRES_DB:-taskmanager};Username=${POSTGRES_USER:-taskmanager};Password=${POSTGRES_PASSWORD};GSS Encryption Mode=Disable"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY .env dosyasinda tanimli olmali (en az 32 bayt)}
+      ReverseProxy__Enabled: "true"
+    # PORT YAYINLANMIYOR: API'ye sadece nginx ulaşır. Bu, ForwardedHeaders'a güvenebilmemizin ŞARTI
+    # (API doğrudan erişilebilir olsaydı herkes sahte X-Forwarded-For gönderebilirdi).
+    depends_on:
+      db:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully # migration BAŞARIYLA bitmeden API başlamaz
+    healthcheck:
+      # aspnet image'ında curl/wget yok (küçük ve güvenli olsun diye). Bash'in /dev/tcp özelliğiyle
+      # ham bir HTTP isteği atıp "200 OK" arıyoruz. (Alternatif: image'a curl eklemek → daha büyük saldırı yüzeyi.)
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      # Dışarıya açılan TEK port. Gerçek sunucuda önüne TLS sonlandıran bir katman (Caddy, Traefik,
+      # bulut load balancer) konur ve 443'ten yayınlanır.
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
