@@ -10,6 +10,12 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.13" />
   </ItemGroup>
 
+  <!-- TaskService, AuthService ve validator'lar "internal": dış projeler sadece interface'leri görür.
+       Unit test projesinin onları doğrudan oluşturabilmesi için SADECE ona görünürlük veriyoruz. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="TaskManager.UnitTests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -138,7 +138,9 @@ builder.Services.AddRateLimiter(options =>
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 10,
+                // Ayardan okunur (varsayılan 10): integration testler çok sayıda kullanıcı kaydettiği için
+                // sınırı yükseltebilsin; canlıda da koda dokunmadan ayarlanabilsin.
+                PermitLimit = builder.Configuration.GetValue("RateLimiting:AuthPermitLimit", 10),
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             }));
@@ -180,3 +182,7 @@ app.UseRateLimiter();        // [EnableRateLimiting] olan endpoint'lerde istek s
 app.MapControllers();        // URL'yi doğru controller action'ına eşler (routing)
 
 app.Run();
+
+// Top-level statements derleyicinin ürettiği "Program" sınıfı varsayılan olarak internal'dır.
+// Integration testlerdeki WebApplicationFactory<Program> bu sınıfa erişebilsin diye public yapıyoruz.
+public partial class Program;

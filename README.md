@@ -20,7 +20,9 @@ gorev_yonetim_uygulamasi/
 │   │   ├── TaskManager.Application/     # Service'ler, DTO'lar, interface'ler
 │   │   ├── TaskManager.Infrastructure/  # EF Core, PostgreSQL, migration'lar
 │   │   └── TaskManager.Api/             # Controller'lar, Program.cs (composition root)
-│   └── tests/            # (Aşama 9)
+│   └── tests/
+│       ├── TaskManager.UnitTests/         # xUnit, fake bağımlılıklar, FakeTimeProvider
+│       └── TaskManager.IntegrationTests/  # WebApplicationFactory + Testcontainers (gerçek PostgreSQL)
 ├── frontend/             # React uygulaması (Aşama 5)
 ├── docs/                 # Her aşamanın ders notu (neden/alternatif/sorun/mülakat)
 └── README.md
@@ -68,6 +70,20 @@ npm run dev
 # -> http://localhost:5173
 ```
 
+## Testler
+
+```bash
+# Backend: unit (~0.3 sn) + integration (Docker açık olmalı; geçici PostgreSQL container'ı açar, ~5 sn)
+cd backend
+dotnet test
+dotnet test tests/TaskManager.UnitTests          # sadece unit testler (Docker gerekmez)
+
+# Frontend: Vitest + Testing Library
+cd frontend
+npm test              # bir kez çalıştır
+npm run test:watch    # dosya değiştikçe yeniden çalıştır
+```
+
 ## Sık kullanılan komutlar
 
 ```bash
@@ -97,5 +113,5 @@ docker compose down -v && docker compose up -d && dotnet ef database update --pr
 | 06 | [Frontend ↔ Backend (CORS, TanStack Query)](docs/06-frontend-backend-baglantisi.md) | ✅ |
 | 07 | [JWT kimlik doğrulama](docs/07-jwt-kimlik-dogrulama.md) | ✅ |
 | 08 | [Kullanıcıya özel veri, filtreleme, sayfalama](docs/08-kullaniciya-ozel-veri-sayfalama.md) | ✅ |
-| 09 | Test | ⏳ |
+| 09 | [Test](docs/09-test.md) | ✅ |
 | 10 | Docker ve deploy | ⏳ |
