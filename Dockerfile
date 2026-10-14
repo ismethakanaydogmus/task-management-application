@@ -43,7 +43,7 @@ COPY --from=api-build /app/publish .
 COPY --from=web-build /web/dist ./wwwroot
 
 # Görüntüye kaynak kodun nereden geldiğini yaz (GitHub Container Registry image'ı repoya bağlar).
-LABEL org.opencontainers.image.source="https://github.com/OWNER/REPO"
+LABEL org.opencontainers.image.source="https://github.com/ismethakanaydogmus/gorev-yonetim-uygulamasi"
 
 USER $APP_UID
 EXPOSE 8080

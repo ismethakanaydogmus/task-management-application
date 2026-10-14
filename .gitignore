@@ -496,3 +496,6 @@ dist/
 # Kişisel/yerel geçersiz kılmalar için .env.development.local kullan (o yine ignore edilir).
 !frontend/.env.development
 !frontend/.env.production
+
+# Kişisel ders notları: bilgisayarda kalır, GitHub'a gönderilmez.
+docs/

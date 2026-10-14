@@ -1,136 +1,175 @@
-# Görev Yönetim Uygulaması (Task Manager)
+# Görev Yöneticisi — Full Stack (.NET 10 + React)
 
-Full stack öğrenme ve şablon projesi.
+[![CI](https://github.com/ismethakanaydogmus/gorev-yonetim-uygulamasi/actions/workflows/ci.yml/badge.svg)](https://github.com/ismethakanaydogmus/gorev-yonetim-uygulamasi/actions/workflows/ci.yml)
+
+Kullanıcıların kayıt olup kendi görevlerini oluşturduğu, filtreleyip aradığı ve takip ettiği bir görev yönetim uygulaması.
+Amaç basit bir "to-do" listesinin ötesine geçip **gerçek bir üretim uygulamasında beklenen** mimari, güvenlik,
+test ve dağıtım pratiklerini uçtan uca uygulamak.
+
+**🔗 Canlı demo:** _yakında_
+
+---
+
+## Özellikler
+
+- **Hesap sistemi:** Kayıt, giriş, oturumun sayfa yenilenince korunması, çıkış
+- **Görevler:** Oluşturma, düzenleme, tamamlama, silme; öncelik ve son tarih
+- **Liste:** Durum ve öncelik filtresi, başlık/açıklamada arama, sıralama, sayfalama
+- **Gizlilik:** Her kullanıcı yalnızca kendi görevlerini görebilir ve değiştirebilir
+- **Kullanıcı deneyimi:** Yükleniyor / hata / boş durumları, alan bazlı doğrulama mesajları, açık/koyu tema, mobil uyum
+
+## Teknolojiler
 
 | Katman | Teknoloji |
 |---|---|
-| Backend | ASP.NET Core Web API (.NET 10, Controller tabanlı) |
-| Veritabanı | PostgreSQL (Docker) + Entity Framework Core |
-| Frontend | React + Vite + TypeScript |
-| Kimlik doğrulama | JWT |
+| Backend | ASP.NET Core 10 Web API, C# 14 |
+| Mimari | Clean Architecture (Domain / Application / Infrastructure / Api) |
+| Veri | PostgreSQL, Entity Framework Core 10, migration'lar |
+| Doğrulama ve hatalar | FluentValidation, RFC 9457 ProblemDetails, global exception handler |
+| Kimlik doğrulama | JWT access token + rotation'lı refresh token (httpOnly cookie), PBKDF2 şifre hash'leme |
+| Frontend | React 19, TypeScript, Vite, TanStack Query |
+| Test | xUnit, Testcontainers (gerçek PostgreSQL), Vitest, Testing Library |
+| Altyapı | Docker (multi-stage), nginx, GitHub Actions CI |
+| Canlı ortam | Azure Container Apps, Neon (serverless PostgreSQL), GitHub Container Registry |
 
-## Klasör yapısı
+## Mimari
 
-```
-gorev_yonetim_uygulamasi/
-├── backend/              # .NET solution
-│   ├── TaskManager.slnx
-│   ├── src/
-│   │   ├── TaskManager.Domain/          # Entity'ler (hiçbir şeye bağımlı değil)
-│   │   ├── TaskManager.Application/     # Service'ler, DTO'lar, interface'ler
-│   │   ├── TaskManager.Infrastructure/  # EF Core, PostgreSQL, migration'lar
-│   │   └── TaskManager.Api/             # Controller'lar, Program.cs (composition root)
-│   ├── tests/
-│   │   ├── TaskManager.UnitTests/         # xUnit, fake bağımlılıklar, FakeTimeProvider
-│   │   └── TaskManager.IntegrationTests/  # WebApplicationFactory + Testcontainers (gerçek PostgreSQL)
-│   └── Dockerfile        # multi-stage: build → migrator (EF bundle) → final (runtime, root olmayan)
-├── frontend/             # React + Vite + TypeScript
-│   ├── Dockerfile        # multi-stage: Node build → nginx (root olmayan)
-│   └── nginx.conf        # statik dosyalar + /api reverse proxy + güvenlik başlıkları
-├── docs/                 # Her aşamanın ders notu (neden/alternatif/sorun/mülakat)
-├── .github/workflows/ci.yml   # her push'ta build + test + lint + docker build
-├── docker-compose.yml         # geliştirme: sadece PostgreSQL
-├── docker-compose.prod.yml    # production benzeri: db + migrator + api + web
-└── README.md
+```mermaid
+flowchart LR
+    B[Tarayıcı<br/>React SPA] -- "HTTPS (aynı origin)" --> A
+
+    subgraph AZ[Azure Container Apps]
+        A[ASP.NET Core API<br/>+ statik React dosyaları]
+    end
+
+    A -- "EF Core (TLS)" --> D[(Neon<br/>PostgreSQL)]
 ```
 
-## İlk kurulum (yeni bir bilgisayarda bir kez)
+Backend katmanları ve bağımlılık yönü (bağımlılıklar her zaman içe doğru):
 
-Gerekenler: .NET 10 SDK, Docker Desktop, Node.js (frontend için).
-
-```bash
-# 1) Ortam değişkenleri: örnek dosyayı kopyala, POSTGRES_PASSWORD'ü değiştir
-cp .env.example .env
-
-# 2) Veritabanını başlat (Docker'da PostgreSQL, bilgisayarda 5433 portu)
-docker compose up -d
-
-# 3) Backend araçları (dotnet-ef) ve connection string (.env'deki değerlerle aynı olmalı)
-cd backend
-dotnet tool restore
-dotnet user-secrets set "ConnectionStrings:Default" \
-  "Host=localhost;Port=5433;Database=taskmanager;Username=taskmanager;Password=<.env'deki şifre>" \
-  --project src/TaskManager.Api
-
-# 4) JWT imza anahtarı (GİZLİ, en az 32 bayt). Rastgele üret:
-dotnet user-secrets set "Jwt:SigningKey" "$(openssl rand -base64 64)" --project src/TaskManager.Api
-#    (openssl yoksa PowerShell: [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(64)))
-
-# 5) Tabloları oluştur
-dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
+```mermaid
+flowchart TD
+    Api[Api<br/>Controller'lar, middleware, composition root] --> Application
+    Api --> Infrastructure
+    Infrastructure[Infrastructure<br/>EF Core, JWT, şifre hash'leme] --> Application
+    Application[Application<br/>Service'ler, DTO'lar, validator'lar, interface'ler] --> Domain[Domain<br/>Entity'ler]
 ```
 
-## Production benzeri çalıştırma (sadece Docker gerekir)
+İş mantığı (Application) veritabanını veya HTTP'yi bilmez; ihtiyaç duyduğu yetenekleri interface olarak tanımlar,
+Infrastructure bunları gerçekleştirir (Dependency Inversion). Kural derleyici tarafından zorlanır: Application projesinin
+EF Core'a referansı yoktur.
 
-```bash
-cp .env.example .env     # POSTGRES_PASSWORD ve JWT_SIGNING_KEY'i değiştir (openssl rand -base64 64)
-docker compose -f docker-compose.prod.yml up -d --build
-# -> http://localhost:8080   (nginx: frontend + /api reverse proxy; DB ve API dışarıya kapalı)
+## Öne çıkan mühendislik kararları
 
-docker compose -f docker-compose.prod.yml logs -f api   # JSON loglar
-docker compose -f docker-compose.prod.yml down          # durdur (veri volume'da kalır)
-```
+**Güvenlik**
+- **IDOR koruması:** Sahiplik kontrolü ayrı bir `if` değil, sorgunun kendisi (`WHERE id = @id AND user_id = @me`).
+  Başkasının görevine erişim, hiç var olmayan bir görevle aynı **404** cevabını alır; kaynağın varlığı bile sızmaz.
+- **Token saklama:** Access token yalnızca JavaScript belleğinde (15 dk), refresh token `HttpOnly; Secure; SameSite=Strict`
+  cookie'de. XSS ile token çalınamaz; sayfa yenilenince oturum sessizce yenilenir.
+- **Refresh token rotation + reuse detection:** Her refresh token tek kullanımlık. Daha önce kullanılmış bir token tekrar
+  gelirse (çalınma göstergesi) kullanıcının tüm oturumları kapatılır. Veritabanında token'ların yalnızca hash'i tutulur.
+- **"Varsayılan olarak güvenli":** Fallback authorization policy ile her endpoint giriş ister; herkese açık olanlar bilinçli olarak açılır.
+- Kullanıcı numaralandırma ve zamanlama saldırısına karşı aynı hata mesajı ve sabit süreli doğrulama, giriş uç noktalarında
+  rate limiting, LIKE joker karakter kaçışı, sıralama alanlarında whitelist, Content-Security-Policy ve diğer güvenlik başlıkları.
 
-Başlatma sırası: `db` (healthy) → `migrator` (migration'ları uygular, çıkar) → `api` (healthy) → `web`.
+**Veri ve API**
+- Tüm hatalar tek tip **ProblemDetails** JSON'u; alan bazlı hatalar frontend'de ilgili input'un altında gösterilir.
+- Filtreleme, arama, sıralama ve sayfalama veritabanında; sorgu kalıbına göre composite index'ler.
+- Deterministik sıralama (eşit değerlerde `id` ile ikincil sıralama) → sayfalar arasında tekrar eden veya kaybolan kayıt yok.
+- Geçici bağlantı hatalarında otomatik yeniden deneme (EF Core execution strategy); `CancellationToken` istemciden veritabanına kadar taşınır.
 
-## Geliştirme ortamında çalıştırma
-
-```bash
-# Backend (terminal 1)
-docker compose up -d          # veritabanı çalışmıyorsa
-cd backend
-dotnet run --project src/TaskManager.Api
-# -> http://localhost:5263/api/tasks
-
-# Frontend (terminal 2)
-cd frontend
-npm install                   # ilk seferde
-npm run dev
-# -> http://localhost:5173
-```
+**Frontend**
+- Sunucu verisi (TanStack Query) ile istemci durumu (`useState`) ayrımı; önbellek anahtarı hiyerarşisi ve invalidation.
+- Eşzamanlı 401'lerde **tek** refresh isteği (single-flight) — refresh token rotation ile birlikte kullanıldığında şart.
+- Erişilebilir formlar (`label`, `aria-invalid`, `role="alert"`), arama için debounce, sayfa geçişinde önceki verinin korunması.
 
 ## Testler
 
-```bash
-# Backend: unit (~0.3 sn) + integration (Docker açık olmalı; geçici PostgreSQL container'ı açar, ~5 sn)
-cd backend
-dotnet test
-dotnet test tests/TaskManager.UnitTests          # sadece unit testler (Docker gerekmez)
-
-# Frontend: Vitest + Testing Library
-cd frontend
-npm test              # bir kez çalıştır
-npm run test:watch    # dosya değiştikçe yeniden çalıştır
-```
-
-## Sık kullanılan komutlar
-
-```bash
-# Model değişti → yeni migration
-#   --project         : migration'ların ve DbContext'in olduğu proje
-#   --startup-project : configuration'ı (user-secrets) ve DI'ı kuran çalıştırılabilir proje
-dotnet ef migrations add <Isim> --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api --output-dir Persistence/Migrations
-dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
-
-# Veritabanına psql ile bağlan
-docker exec -it taskmanager-db psql -U taskmanager -d taskmanager
-
-# Veritabanını tamamen sıfırla (TÜM VERİ SİLİNİR)
-docker compose down -v && docker compose up -d && dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
-```
-
-## Ders notları
-
-| # | Konu | Durum |
+| Grup | Sayı | Kapsam |
 |---|---|---|
-| 00 | [Proje iskeleti](docs/00-proje-iskeleti.md) | ✅ |
-| 01 | [İlk Web API (Task CRUD)](docs/01-ilk-web-api.md) | ✅ |
-| 02 | [PostgreSQL + EF Core](docs/02-postgresql-ef-core.md) | ✅ |
-| 03 | [Katmanlı mimari, DTO](docs/03-katmanli-mimari.md) | ✅ |
-| 04 | [Validasyon ve hata yönetimi](docs/04-validasyon-hata-yonetimi.md) | ✅ |
-| 05 | [React + Vite + TypeScript](docs/05-react-vite-typescript.md) | ✅ |
-| 06 | [Frontend ↔ Backend (CORS, TanStack Query)](docs/06-frontend-backend-baglantisi.md) | ✅ |
-| 07 | [JWT kimlik doğrulama](docs/07-jwt-kimlik-dogrulama.md) | ✅ |
-| 08 | [Kullanıcıya özel veri, filtreleme, sayfalama](docs/08-kullaniciya-ozel-veri-sayfalama.md) | ✅ |
-| 09 | [Test](docs/09-test.md) | ✅ |
-| 10 | [Docker, production ve CI](docs/10-docker-deploy-ci.md) | ✅ |
+| Backend unit | 28 | İş kuralları, doğrulama, sahiplik, token rotation ve reuse detection (`FakeTimeProvider` ile zaman kontrolü) |
+| Backend integration | 25 | Gerçek HTTP + gerçek PostgreSQL (Testcontainers): IDOR, sıralama/arama/sayfalama, cookie bayrakları, eksik migration kontrolü, health check |
+| Frontend | 21 | Form davranışı, backend hatalarının gösterimi, saat dilimi dönüşümü, single-flight refresh |
+
+Testlerin gerçekten hata yakaladığı, koda bilerek hata sokularak (mutation) doğrulandı.
+Tüm testler her push'ta **GitHub Actions** üzerinde çalışır.
+
+## Projeyi çalıştırma
+
+### Seçenek 1 — Sadece Docker ile (en hızlı)
+
+```bash
+cp .env.example .env    # POSTGRES_PASSWORD ve JWT_SIGNING_KEY değerlerini değiştir
+docker compose -f docker-compose.prod.yml up -d --build
+```
+→ http://localhost:8080
+
+Başlatma sırası: `db` → `migrator` (migration'ları uygular ve çıkar) → `api` → `web` (nginx).
+Dışarıya yalnızca web portu açılır; API ve veritabanı iç ağdadır.
+
+### Seçenek 2 — Geliştirme ortamı
+
+Gerekenler: .NET 10 SDK, Node.js 24, Docker
+
+```bash
+cp .env.example .env
+docker compose up -d                        # PostgreSQL (localhost:5433)
+
+cd backend
+dotnet tool restore
+dotnet user-secrets set "ConnectionStrings:Default" "Host=localhost;Port=5433;Database=taskmanager;Username=taskmanager;Password=<.env'deki şifre>" --project src/TaskManager.Api
+dotnet user-secrets set "Jwt:SigningKey" "$(openssl rand -base64 64)" --project src/TaskManager.Api
+dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
+dotnet run --project src/TaskManager.Api    # http://localhost:5263
+
+cd ../frontend
+npm install
+npm run dev                                 # http://localhost:5173
+```
+
+### Testler
+
+```bash
+cd backend && dotnet test     # integration testler için Docker açık olmalı
+cd frontend && npm test
+```
+
+## Proje yapısı
+
+```
+├── backend/
+│   ├── src/
+│   │   ├── TaskManager.Domain/            # Entity'ler
+│   │   ├── TaskManager.Application/       # Service'ler, DTO'lar, validator'lar, interface'ler
+│   │   ├── TaskManager.Infrastructure/    # EF Core, migration'lar, JWT, şifre hash'leme
+│   │   └── TaskManager.Api/               # Controller'lar, middleware, hata yönetimi
+│   ├── tests/
+│   │   ├── TaskManager.UnitTests/
+│   │   └── TaskManager.IntegrationTests/
+│   └── Dockerfile                         # api ve migration bundle image'ları
+├── frontend/
+│   ├── src/
+│   │   ├── api/                           # fetch sarmalayıcı, token yenileme
+│   │   ├── auth/                          # oturum durumu (Context)
+│   │   ├── components/
+│   │   └── hooks/                         # TanStack Query hook'ları
+│   ├── Dockerfile                         # nginx ile statik sunum
+│   └── nginx.conf                         # reverse proxy + güvenlik başlıkları
+├── Dockerfile                             # tek container (Azure): API + React
+├── docker-compose.yml                     # geliştirme veritabanı
+├── docker-compose.prod.yml                # tam sistem
+└── .github/workflows/ci.yml
+```
+
+## Canlı ortam (dağıtım)
+
+- **Uygulama:** Kök `Dockerfile` React'ı derleyip ASP.NET Core uygulamasının `wwwroot` klasörüne koyar; tek image,
+  tek origin. Böylece CORS'a gerek kalmaz ve `SameSite=Strict` refresh cookie'si çalışmaya devam eder.
+- **Barındırma:** Azure Container Apps (tüketim planı, kullanılmadığında sıfıra ölçeklenir).
+- **Veritabanı:** Neon serverless PostgreSQL; migration'lar EF Core migration bundle ile uygulanır.
+- **Image deposu:** GitHub Container Registry.
+- **Gizli bilgiler:** Bağlantı dizesi ve JWT imza anahtarı Container Apps secret'ları olarak tutulur; repoda veya image'da yer almaz.
+
+---
+
+Geliştiren: **İsmet Hakan Aydoğmuş** · [GitHub](https://github.com/ismethakanaydogmus)
