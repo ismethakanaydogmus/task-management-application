@@ -51,10 +51,17 @@ dotnet ef database update --project src/TaskManager.Infrastructure --startup-pro
 ## Çalıştırma
 
 ```bash
+# Backend (terminal 1)
 docker compose up -d          # veritabanı çalışmıyorsa
 cd backend
 dotnet run --project src/TaskManager.Api
 # -> http://localhost:5263/api/tasks
+
+# Frontend (terminal 2)
+cd frontend
+npm install                   # ilk seferde
+npm run dev
+# -> http://localhost:5173
 ```
 
 ## Sık kullanılan komutlar
@@ -82,7 +89,7 @@ docker compose down -v && docker compose up -d && dotnet ef database update --pr
 | 02 | [PostgreSQL + EF Core](docs/02-postgresql-ef-core.md) | ✅ |
 | 03 | [Katmanlı mimari, DTO](docs/03-katmanli-mimari.md) | ✅ |
 | 04 | [Validasyon ve hata yönetimi](docs/04-validasyon-hata-yonetimi.md) | ✅ |
-| 05 | React + Vite + TypeScript | ⏳ |
+| 05 | [React + Vite + TypeScript](docs/05-react-vite-typescript.md) | ✅ |
 | 06 | Frontend ↔ Backend (CORS, TanStack Query) | ⏳ |
 | 07 | JWT kimlik doğrulama | ⏳ |
 | 08 | Kullanıcıya özel veri, filtreleme, sayfalama | ⏳ |
