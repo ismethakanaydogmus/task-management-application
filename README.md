@@ -44,7 +44,11 @@ dotnet user-secrets set "ConnectionStrings:Default" \
   "Host=localhost;Port=5433;Database=taskmanager;Username=taskmanager;Password=<.env'deki şifre>" \
   --project src/TaskManager.Api
 
-# 4) Tabloları oluştur
+# 4) JWT imza anahtarı (GİZLİ, en az 32 bayt). Rastgele üret:
+dotnet user-secrets set "Jwt:SigningKey" "$(openssl rand -base64 64)" --project src/TaskManager.Api
+#    (openssl yoksa PowerShell: [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(64)))
+
+# 5) Tabloları oluştur
 dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
 ```
 
@@ -91,7 +95,7 @@ docker compose down -v && docker compose up -d && dotnet ef database update --pr
 | 04 | [Validasyon ve hata yönetimi](docs/04-validasyon-hata-yonetimi.md) | ✅ |
 | 05 | [React + Vite + TypeScript](docs/05-react-vite-typescript.md) | ✅ |
 | 06 | [Frontend ↔ Backend (CORS, TanStack Query)](docs/06-frontend-backend-baglantisi.md) | ✅ |
-| 07 | JWT kimlik doğrulama | ⏳ |
+| 07 | [JWT kimlik doğrulama](docs/07-jwt-kimlik-dogrulama.md) | ✅ |
 | 08 | Kullanıcıya özel veri, filtreleme, sayfalama | ⏳ |
 | 09 | Test | ⏳ |
 | 10 | Docker ve deploy | ⏳ |

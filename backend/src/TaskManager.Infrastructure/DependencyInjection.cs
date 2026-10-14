@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using TaskManager.Application.Abstractions;
+using TaskManager.Infrastructure.Auth;
 using TaskManager.Infrastructure.Persistence;
 using TaskManager.Infrastructure.Persistence.Repositories;
 
@@ -36,6 +37,24 @@ public static class DependencyInjection
                 .UseSnakeCaseNamingConvention());
 
         services.AddScoped<ITaskRepository, EfTaskRepository>();
+        services.AddScoped<IUserRepository, EfUserRepository>();
+        services.AddScoped<IRefreshTokenRepository, EfRefreshTokenRepository>();
+
+        // ---------- Kimlik doğrulama ----------
+        // ValidateOnStart: Ayarlar eksik/hatalıysa uygulama AÇILIRKEN çöker (fail fast).
+        // Aksi halde uygulama sorunsuz açılır, ilk kullanıcı giriş yapmaya çalıştığında anlaşılmaz bir hata alırdık.
+        services.AddOptions<JwtOptions>()
+            .Bind(configuration.GetSection(JwtOptions.SectionName))
+            .Validate(o => !string.IsNullOrWhiteSpace(o.Issuer) && !string.IsNullOrWhiteSpace(o.Audience),
+                "Jwt:Issuer ve Jwt:Audience ayarlanmalı.")
+            // HMAC-SHA256 için anahtar en az 256 bit (32 bayt) olmalı. Kısa anahtar kaba kuvvetle bulunabilir.
+            .Validate(o => System.Text.Encoding.UTF8.GetByteCount(o.SigningKey) >= 32,
+                "Jwt:SigningKey en az 32 bayt olmalı. 'dotnet user-secrets set \"Jwt:SigningKey\" \"...\"' ile ayarla.")
+            .ValidateOnStart();
+
+        // Durumsuz (stateless) ve thread-safe → Singleton yeterli.
+        services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
 
         return services;
     }

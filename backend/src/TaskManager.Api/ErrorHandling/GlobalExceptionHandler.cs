@@ -43,6 +43,20 @@ internal sealed class GlobalExceptionHandler(
                 Detail = notFound.Message
             },
 
+            UnauthorizedException unauthorized => new ProblemDetails
+            {
+                Status = StatusCodes.Status401Unauthorized,
+                Title = "Kimlik doğrulanamadı",
+                Detail = unauthorized.Message
+            },
+
+            ConflictException conflict => new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Çakışma",
+                Detail = conflict.Message
+            },
+
             // Beklenmeyen her şey. Detay (exception mesajı, stack trace) istemciye GİTMEZ:
             // veritabanı adı, tablo yapısı, dosya yolları gibi saldırgana ipucu verecek bilgiler içerebilir.
             // Geliştirme ortamında hata ayıklamayı kolaylaştırmak için sadece mesajı ekliyoruz.

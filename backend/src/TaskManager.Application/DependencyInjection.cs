@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using TaskManager.Application.Auth;
 using TaskManager.Application.Tasks;
 
 namespace TaskManager.Application;
@@ -12,6 +13,7 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<ITaskService, TaskService>();
+        services.AddScoped<IAuthService, AuthService>();
 
         // Bu assembly'deki tüm AbstractValidator<T> sınıflarını bulup IValidator<T> olarak kaydeder.
         // Yeni bir validator yazınca buraya satır eklemene gerek kalmaz.

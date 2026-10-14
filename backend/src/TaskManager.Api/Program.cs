@@ -8,9 +8,15 @@
 // =====================================================================
 
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
+using TaskManager.Api.Controllers;
 using TaskManager.Api.ErrorHandling;
 using TaskManager.Application;
 using TaskManager.Infrastructure;
+using TaskManager.Infrastructure.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 // CreateBuilder şunları hazır getirir:
@@ -73,15 +79,63 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy(FrontendCorsPolicy, policy => policy
         .WithOrigins(allowedOrigins)
-        .AllowAnyHeader()                  // Content-Type, (Aşama 7'de) Authorization...
+        .AllowAnyHeader()                  // Content-Type, Authorization
         .AllowAnyMethod()                  // GET, POST, PUT, DELETE
+        // AllowCredentials: Tarayıcı cross-origin isteklerde cookie'yi (refresh token) ancak bu izinle gönderir/kabul eder.
+        // Frontend tarafında da fetch(..., { credentials: 'include' }) gerekir. İkisi birlikte olmazsa cookie yok sayılır.
+        .AllowCredentials()
         .WithExposedHeaders("Location"));  // 201 cevabındaki Location header'ını JS okuyabilsin
 });
 
 // Her katman kendi servislerini kendi DependencyInjection.cs dosyasında kaydeder.
 // Api projesi (composition root) sadece hepsini bir araya getirir.
-builder.Services.AddApplication();                            // TaskService, validator'lar, TimeProvider
-builder.Services.AddInfrastructure(builder.Configuration);    // AppDbContext (PostgreSQL), EfTaskRepository
+builder.Services.AddApplication();                            // TaskService, AuthService, validator'lar, TimeProvider
+builder.Services.AddInfrastructure(builder.Configuration);    // AppDbContext, repository'ler, JWT, şifre hash'leme
+
+// ---------- AUTHENTICATION (Sen kimsin?) ----------
+// JwtBearer: her istekte "Authorization: Bearer <token>" başlığını okur, imzayı/süreyi/issuer'ı doğrular,
+// geçerliyse HttpContext.User'ı token'daki claim'lerle doldurur. Veritabanına GİTMEZ (stateless).
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        // .NET varsayılan olarak "sub" gibi standart JWT claim adlarını uzun Microsoft URI'larına çevirir
+        // ("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"). Kafa karıştırıcı; kapatıyoruz.
+        options.MapInboundClaims = false;
+    });
+
+// Doğrulama kuralları (issuer, audience, imza anahtarı) JwtOptions'tan gelir — token ÜRETEN JwtTokenService ile AYNI kaynak.
+builder.Services
+    .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtOptions>>((bearer, jwt) =>
+        bearer.TokenValidationParameters = jwt.Value.CreateValidationParameters());
+
+// ---------- AUTHORIZATION (Buna yetkin var mı?) ----------
+// FALLBACK POLICY: [Authorize] veya [AllowAnonymous] yazılmamış HER endpoint "giriş yapmış kullanıcı" ister.
+// "Varsayılan olarak güvenli" (secure by default): yeni bir controller eklerken [Authorize] yazmayı UNUTSAN bile
+// endpoint korumalı olur. Herkese açık olması gerekenleri [AllowAnonymous] ile BİLİNÇLİ olarak açarız.
+// Alternatif: her controller'a tek tek [Authorize] yazmak → birini unutmak = veri sızıntısı.
+builder.Services.AddAuthorizationBuilder()
+    .SetFallbackPolicy(new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
+
+// ---------- RATE LIMITING ----------
+// Giriş/kayıt endpoint'lerine aynı IP'den dakikada en fazla 10 istek.
+// Olmasaydı: saldırgan saniyede yüzlerce şifre deneyebilirdi (brute force / credential stuffing).
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(RateLimitPolicies.Auth, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            // Her IP adresi kendi "kovasına" sahip. (Reverse proxy arkasında gerçek IP için
+            // ForwardedHeaders middleware'i gerekir — Aşama 10.)
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
 
 var app = builder.Build();
 
@@ -100,7 +154,7 @@ if (app.Environment.IsDevelopment())
 {
     // API dokümanını sadece geliştirme ortamında açıyoruz:
     // canlı ortamda iç yapımızı dışarıya göstermek istemeyiz.
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous(); // fallback policy'den muaf: dokümanı görmek için giriş gerekmesin
 }
 
 app.UseHttpsRedirection();   // http:// gelen isteği https://'e yönlendirir
@@ -110,7 +164,12 @@ app.UseHttpsRedirection();   // http:// gelen isteği https://'e yönlendirir
 // Yanlış sırada olursa preflight 401/405 alır ve tarayıcı asıl isteği HİÇ göndermez.
 app.UseCors(FrontendCorsPolicy);
 
-app.UseAuthorization();     // [Authorize] attribute'larını kontrol eder (Aşama 7'de anlam kazanacak)
+// Sıra KRİTİK: önce "kimsin?" (Authentication), sonra "yetkin var mı?" (Authorization).
+// Ters olsaydı Authorization çalışırken kullanıcı henüz tanınmamış olur, her istek 401 alırdı.
+app.UseAuthentication();     // Bearer token'ı doğrula → HttpContext.User
+app.UseAuthorization();      // Fallback policy / [Authorize] / [AllowAnonymous] kontrolü
+app.UseRateLimiter();        // [EnableRateLimiting] olan endpoint'lerde istek sayısını sınırla
+
 app.MapControllers();        // URL'yi doğru controller action'ına eşler (routing)
 
 app.Run();

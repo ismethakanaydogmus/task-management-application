@@ -291,6 +291,60 @@ button {
   margin: 0;
 }
 
+/* ---------- Aşama 7: giriş / kullanıcı menüsü ---------- */
+.auth-container {
+  max-width: 440px;
+}
+
+.app-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.user-email {
+  color: var(--muted);
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.user-menu .btn-secondary {
+  margin-top: 0;
+  padding: 6px 12px;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.auth-switch {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
 /* ---------- Aşama 6: yükleniyor / hata durumları ---------- */
 button:disabled {
   cursor: not-allowed;

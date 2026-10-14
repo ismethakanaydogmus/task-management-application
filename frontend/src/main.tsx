@@ -6,6 +6,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ApiError } from './api/client';
 import App from './App.tsx';
+import { AuthProvider } from './auth/AuthProvider';
 import './index.css';
 
 // QueryClient: TÜM sunucu verisinin önbelleği. Uygulamada TEK bir tane olur (backend'deki Singleton gibi).
@@ -30,7 +31,10 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Provider: alt ağaçtaki her component useQuery/useMutation ile bu önbelleğe erişebilir (React Context). */}
     <QueryClientProvider client={queryClient}>
-      <App />
+      {/* AuthProvider, QueryClientProvider'ın İÇİNDE: çıkışta önbelleği temizlemek için queryClient'a erişmeli. */}
+      <AuthProvider>
+        <App />
+      </AuthProvider>
       {/* Sağ alttaki çiçek ikonu: önbellekteki sorguları, durumlarını, verilerini canlı gösterir.
           Production build'de otomatik olarak çıkarılır. */}
       <ReactQueryDevtools initialIsOpen={false} />
