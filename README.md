@@ -81,7 +81,7 @@ docker compose down -v && docker compose up -d && dotnet ef database update --pr
 | 01 | [İlk Web API (Task CRUD)](docs/01-ilk-web-api.md) | ✅ |
 | 02 | [PostgreSQL + EF Core](docs/02-postgresql-ef-core.md) | ✅ |
 | 03 | [Katmanlı mimari, DTO](docs/03-katmanli-mimari.md) | ✅ |
-| 04 | Validasyon ve hata yönetimi | ⏳ |
+| 04 | [Validasyon ve hata yönetimi](docs/04-validasyon-hata-yonetimi.md) | ✅ |
 | 05 | React + Vite + TypeScript | ⏳ |
 | 06 | Frontend ↔ Backend (CORS, TanStack Query) | ⏳ |
 | 07 | JWT kimlik doğrulama | ⏳ |

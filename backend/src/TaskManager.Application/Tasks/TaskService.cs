@@ -1,15 +1,23 @@
+using FluentValidation;
 using TaskManager.Application.Abstractions;
+using TaskManager.Application.Common.Exceptions;
 using TaskManager.Domain.Entities;
 
 namespace TaskManager.Application.Tasks;
 
 // SERVICE katmanı = iş kurallarının yaşadığı yer.
 // HTTP'den habersiz: HttpContext, IActionResult, status code... hiçbirini bilmez.
-// Bu sayede aynı mantık bir controller'dan, bir arka plan işinden veya bir testten çağrılabilir.
 //
-// TimeProvider (.NET 8+): DateTime.UtcNow yerine "saat" de enjekte ediliyor.
-// Neden? Testte "şu an 2026-01-01 10:00" diyebilmek için (Aşama 9). DateTime.UtcNow'u test edemezsin.
-internal sealed class TaskService(ITaskRepository repository, TimeProvider clock) : ITaskService
+// Validasyon NEDEN controller'da değil de burada çalışıyor?
+// Service'i kim çağırırsa çağırsın (controller, arka plan işi, başka bir service, test)
+// geçersiz veri içeri GİREMEZ. Controller'da olsaydı, başka bir çağıran validasyonu atlayabilirdi.
+//
+// TimeProvider: DateTime.UtcNow yerine enjekte edilen saat → testte zamanı kontrol edebilmek için.
+internal sealed class TaskService(
+    ITaskRepository repository,
+    TimeProvider clock,
+    IValidator<CreateTaskRequest> createValidator,
+    IValidator<UpdateTaskRequest> updateValidator) : ITaskService
 {
     public async Task<IReadOnlyList<TaskResponse>> GetAllAsync(CancellationToken ct = default)
     {
@@ -17,20 +25,23 @@ internal sealed class TaskService(ITaskRepository repository, TimeProvider clock
         return tasks.Select(t => t.ToResponse()).ToList();
     }
 
-    public async Task<TaskResponse?> GetByIdAsync(int id, CancellationToken ct = default)
+    public async Task<TaskResponse> GetByIdAsync(int id, CancellationToken ct = default)
     {
-        var task = await repository.GetByIdAsync(id, ct);
-        return task?.ToResponse();
+        var task = await GetTaskOrThrowAsync(id, ct);
+        return task.ToResponse();
     }
 
     public async Task<TaskResponse> CreateAsync(CreateTaskRequest request, CancellationToken ct = default)
     {
+        // Geçersizse FluentValidation.ValidationException fırlatır (tüm hatalar içinde) → 400
+        await createValidator.ValidateAndThrowAsync(request, ct);
+
         var task = new TaskItem
         {
             Title = request.Title.Trim(),
             Description = request.Description?.Trim(),
             Priority = request.Priority,
-            DueDate = request.DueDate,
+            DueDate = request.DueDate?.ToUniversalTime(), // "+03:00" ile geldiyse UTC'ye çevir
             CreatedAt = clock.GetUtcNow().UtcDateTime
         };
 
@@ -38,20 +49,17 @@ internal sealed class TaskService(ITaskRepository repository, TimeProvider clock
         return task.ToResponse();
     }
 
-    public async Task<bool> UpdateAsync(int id, UpdateTaskRequest request, CancellationToken ct = default)
+    public async Task UpdateAsync(int id, UpdateTaskRequest request, CancellationToken ct = default)
     {
-        var task = await repository.GetByIdAsync(id, ct);
-        if (task is null)
-            return false;
+        await updateValidator.ValidateAndThrowAsync(request, ct);
 
+        var task = await GetTaskOrThrowAsync(id, ct);
         var now = clock.GetUtcNow().UtcDateTime;
 
         // İŞ KURALI: tamamlanma zamanı, durum değiştiği AN kaydedilir.
         //  - açık → tamamlandı : CompletedAt = şimdi
         //  - tamamlandı → açık : CompletedAt temizlenir
         //  - durum değişmediyse: CompletedAt'e dokunulmaz (her PUT'ta tarih ilerlemesin)
-        // Bu kural controller'da olsaydı: aynı işi yapan başka bir endpoint (ör. PATCH /complete)
-        // veya arka plan işi kuralı kopyalamak zorunda kalır, biri unutulunca veri tutarsızlaşırdı.
         if (request.IsCompleted && !task.IsCompleted)
             task.CompletedAt = now;
         else if (!request.IsCompleted && task.IsCompleted)
@@ -61,13 +69,19 @@ internal sealed class TaskService(ITaskRepository repository, TimeProvider clock
         task.Description = request.Description?.Trim();
         task.IsCompleted = request.IsCompleted;
         task.Priority = request.Priority;
-        task.DueDate = request.DueDate;
+        task.DueDate = request.DueDate?.ToUniversalTime();
         task.UpdatedAt = now;
 
         await repository.UpdateAsync(task, ct);
-        return true;
     }
 
-    public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
-        => repository.DeleteAsync(id, ct);
+    public async Task DeleteAsync(int id, CancellationToken ct = default)
+    {
+        var deleted = await repository.DeleteAsync(id, ct);
+        if (!deleted)
+            throw new NotFoundException("Görev", id);
+    }
+
+    private async Task<TaskItem> GetTaskOrThrowAsync(int id, CancellationToken ct)
+        => await repository.GetByIdAsync(id, ct) ?? throw new NotFoundException("Görev", id);
 }

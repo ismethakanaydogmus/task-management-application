@@ -38,19 +38,38 @@ Content-Type: application/json
 ### DELETE — sil (204 veya 404)
 DELETE {{baseUrl}}/api/tasks/1
 
-### HATA ÖRNEKLERİ ---------------------------------------------
+### HATA ÖRNEKLERİ (hepsi ProblemDetails formatında döner) -------
 
-### Boş başlık → 400
+### Birden fazla validasyon hatası aynı anda → 400 (FluentValidation)
+### boş başlık + tanımsız enum sayısı + saat dilimi olmayan tarih
 POST {{baseUrl}}/api/tasks
 Content-Type: application/json
 
-{ "title": "   " }
+{ "title": "   ", "priority": 99, "dueDate": "2026-10-20T18:00:00" }
 
-### Geçersiz enum → [ApiController] otomatik 400 döner
+### Saat dilimi +03:00 → kabul edilir, UTC'ye çevrilir (15:00Z)
+POST {{baseUrl}}/api/tasks
+Content-Type: application/json
+
+{ "title": "İstanbul saatiyle", "dueDate": "2026-10-20T18:00:00+03:00" }
+
+### Geçersiz enum metni → 400 (model binding aşaması)
 POST {{baseUrl}}/api/tasks
 Content-Type: application/json
 
 { "title": "Test", "priority": "CokYuksek" }
+
+### Bozuk JSON → 400
+POST {{baseUrl}}/api/tasks
+Content-Type: application/json
+
+{ "title": bozuk
+
+### Olmayan görev → 404 (NotFoundException)
+GET {{baseUrl}}/api/tasks/99999
+
+### Olmayan adres → 404 (UseStatusCodePages ile yine ProblemDetails)
+GET {{baseUrl}}/api/olmayan-adres
 
 ### id sayı değil → route constraint yüzünden 404
 GET {{baseUrl}}/api/tasks/abc
