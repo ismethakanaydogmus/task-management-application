@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using TaskManager.Api.Models;
+using TaskManager.Domain.Entities;
 
-namespace TaskManager.Api.Data;
+namespace TaskManager.Infrastructure.Persistence;
 
 // DbContext = veritabanıyla bir "oturum".
 //  - Sorguları SQL'e çevirir ve çalıştırır.

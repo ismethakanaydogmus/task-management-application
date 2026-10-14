@@ -8,9 +8,8 @@
 // =====================================================================
 
 using System.Text.Json.Serialization;
-using Microsoft.EntityFrameworkCore;
-using TaskManager.Api.Data;
-using TaskManager.Api.Repositories;
+using TaskManager.Application;
+using TaskManager.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 // CreateBuilder şunları hazır getirir:
@@ -30,27 +29,10 @@ builder.Services
     });
 builder.Services.AddOpenApi();       // /openapi/v1.json adresinde API dokümanı üretir
 
-// Veritabanı bağlantısı.
-// Connection string'i "ConnectionStrings:Default" anahtarından okur. Değer kodda/appsettings'te DEĞİL:
-//  - Geliştirmede: dotnet user-secrets (proje klasörü dışında saklanır, git'e girmez)
-//  - Canlıda:      ortam değişkeni ConnectionStrings__Default  (":" yerine "__")
-var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? throw new InvalidOperationException(
-        "ConnectionStrings:Default bulunamadı. 'dotnet user-secrets set \"ConnectionStrings:Default\" \"...\"' ile ayarla.");
-
-// AddDbContext, AppDbContext'i varsayılan olarak SCOPED kaydeder (her HTTP isteğine bir tane).
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options
-        .UseNpgsql(connectionString)
-        // C#'ta "CreatedAt" → Postgres'te "created_at".
-        // Postgres büyük harfli isimleri ancak tırnakla ("CreatedAt") tanır; elle SQL yazarken
-        // her seferinde tırnak koymak zorunda kalmamak için snake_case kullanıyoruz.
-        .UseSnakeCaseNamingConvention());
-
-// Aşama 1'de: AddSingleton<ITaskRepository, InMemoryTaskRepository>()
-// Artık veri veritabanında; repository durum (state) tutmuyor, Scoped DbContext kullanıyor → SCOPED.
-// Controller'da TEK SATIR değişmedi. Interface'e bağımlı olmanın faydası budur.
-builder.Services.AddScoped<ITaskRepository, EfTaskRepository>();
+// Her katman kendi servislerini kendi DependencyInjection.cs dosyasında kaydeder.
+// Api projesi (composition root) sadece hepsini bir araya getirir.
+builder.Services.AddApplication();                            // TaskService, TimeProvider
+builder.Services.AddInfrastructure(builder.Configuration);    // AppDbContext (PostgreSQL), EfTaskRepository
 
 var app = builder.Build();
 

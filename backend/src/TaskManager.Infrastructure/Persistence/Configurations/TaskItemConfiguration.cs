@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using TaskManager.Api.Models;
+using TaskManager.Domain.Entities;
 
-namespace TaskManager.Api.Data.Configurations;
+namespace TaskManager.Infrastructure.Persistence.Configurations;
 
 // "Fluent API" ile tablo ayarları.
 // Alternatif: TaskItem sınıfının üstüne [MaxLength(200)], [Required] gibi attribute'lar koymak (Data Annotations).

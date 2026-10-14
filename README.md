@@ -15,7 +15,11 @@ Full stack öğrenme ve şablon projesi.
 gorev_yonetim_uygulamasi/
 ├── backend/              # .NET solution
 │   ├── TaskManager.slnx
-│   ├── src/TaskManager.Api/
+│   ├── src/
+│   │   ├── TaskManager.Domain/          # Entity'ler (hiçbir şeye bağımlı değil)
+│   │   ├── TaskManager.Application/     # Service'ler, DTO'lar, interface'ler
+│   │   ├── TaskManager.Infrastructure/  # EF Core, PostgreSQL, migration'lar
+│   │   └── TaskManager.Api/             # Controller'lar, Program.cs (composition root)
 │   └── tests/            # (Aşama 9)
 ├── frontend/             # React uygulaması (Aşama 5)
 ├── docs/                 # Her aşamanın ders notu (neden/alternatif/sorun/mülakat)
@@ -41,7 +45,7 @@ dotnet user-secrets set "ConnectionStrings:Default" \
   --project src/TaskManager.Api
 
 # 4) Tabloları oluştur
-dotnet ef database update --project src/TaskManager.Api
+dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
 ```
 
 ## Çalıştırma
@@ -57,14 +61,16 @@ dotnet run --project src/TaskManager.Api
 
 ```bash
 # Model değişti → yeni migration
-dotnet ef migrations add <Isim> --project src/TaskManager.Api --output-dir Data/Migrations
-dotnet ef database update --project src/TaskManager.Api
+#   --project         : migration'ların ve DbContext'in olduğu proje
+#   --startup-project : configuration'ı (user-secrets) ve DI'ı kuran çalıştırılabilir proje
+dotnet ef migrations add <Isim> --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api --output-dir Persistence/Migrations
+dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
 
 # Veritabanına psql ile bağlan
 docker exec -it taskmanager-db psql -U taskmanager -d taskmanager
 
 # Veritabanını tamamen sıfırla (TÜM VERİ SİLİNİR)
-docker compose down -v && docker compose up -d && dotnet ef database update --project src/TaskManager.Api
+docker compose down -v && docker compose up -d && dotnet ef database update --project src/TaskManager.Infrastructure --startup-project src/TaskManager.Api
 ```
 
 ## Ders notları
@@ -74,7 +80,7 @@ docker compose down -v && docker compose up -d && dotnet ef database update --pr
 | 00 | [Proje iskeleti](docs/00-proje-iskeleti.md) | ✅ |
 | 01 | [İlk Web API (Task CRUD)](docs/01-ilk-web-api.md) | ✅ |
 | 02 | [PostgreSQL + EF Core](docs/02-postgresql-ef-core.md) | ✅ |
-| 03 | Katmanlı mimari, DTO | ⏳ |
+| 03 | [Katmanlı mimari, DTO](docs/03-katmanli-mimari.md) | ✅ |
 | 04 | Validasyon ve hata yönetimi | ⏳ |
 | 05 | React + Vite + TypeScript | ⏳ |
 | 06 | Frontend ↔ Backend (CORS, TanStack Query) | ⏳ |
