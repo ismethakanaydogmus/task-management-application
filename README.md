@@ -1,6 +1,6 @@
 # Görev Yöneticisi — Full Stack (.NET 10 + React)
 
-[![CI](https://github.com/ismethakanaydogmus/gorev-yonetim-uygulamasi/actions/workflows/ci.yml/badge.svg)](https://github.com/ismethakanaydogmus/gorev-yonetim-uygulamasi/actions/workflows/ci.yml)
+[![CI](https://github.com/ismethakanaydogmus/task-management-application/actions/workflows/ci.yml/badge.svg)](https://github.com/ismethakanaydogmus/task-management-application/actions/workflows/ci.yml)
 
 Kullanıcıların kayıt olup kendi görevlerini oluşturduğu, filtreleyip aradığı ve takip ettiği bir görev yönetim uygulaması.
 Amaç basit bir "to-do" listesinin ötesine geçip **gerçek bir üretim uygulamasında beklenen** mimari, güvenlik,
@@ -30,7 +30,7 @@ test ve dağıtım pratiklerini uçtan uca uygulamak.
 | Frontend | React 19, TypeScript, Vite, TanStack Query |
 | Test | xUnit, Testcontainers (gerçek PostgreSQL), Vitest, Testing Library |
 | Altyapı | Docker (multi-stage), nginx, GitHub Actions CI |
-| Canlı ortam | Azure Container Apps, Neon (serverless PostgreSQL), GitHub Container Registry |
+| Canlı ortam | Azure App Service (Free F1, Linux), Neon (serverless PostgreSQL) |
 
 ## Mimari
 
@@ -38,7 +38,7 @@ test ve dağıtım pratiklerini uçtan uca uygulamak.
 flowchart LR
     B[Tarayıcı<br/>React SPA] -- "HTTPS (aynı origin)" --> A
 
-    subgraph AZ[Azure Container Apps]
+    subgraph AZ[Azure App Service]
         A[ASP.NET Core API<br/>+ statik React dosyaları]
     end
 
@@ -163,12 +163,14 @@ cd frontend && npm test
 
 ## Canlı ortam (dağıtım)
 
-- **Uygulama:** Kök `Dockerfile` React'ı derleyip ASP.NET Core uygulamasının `wwwroot` klasörüne koyar; tek image,
-  tek origin. Böylece CORS'a gerek kalmaz ve `SameSite=Strict` refresh cookie'si çalışmaya devam eder.
-- **Barındırma:** Azure Container Apps (tüketim planı, kullanılmadığında sıfıra ölçeklenir).
-- **Veritabanı:** Neon serverless PostgreSQL; migration'lar EF Core migration bundle ile uygulanır.
-- **Image deposu:** GitHub Container Registry.
-- **Gizli bilgiler:** Bağlantı dizesi ve JWT imza anahtarı Container Apps secret'ları olarak tutulur; repoda veya image'da yer almaz.
+- **Tek uygulama, tek origin:** React build çıktısı ASP.NET Core uygulamasının `wwwroot` klasörüne konur; API hem
+  arayüzü hem `/api` uç noktalarını sunar. Böylece CORS'a gerek kalmaz ve `SameSite=Strict` refresh cookie'si çalışır.
+- **Barındırma:** Azure App Service, **Free (F1)** plan, Linux, .NET 10. Ücretli bir kademesi olmadığı için kota aşılsa bile
+  ücret oluşmaz (uygulama o gün için durdurulur). Bedeli: bir süre kullanılmayınca uyku moduna geçer, ilk istek birkaç saniye sürer.
+- **Veritabanı:** Neon serverless PostgreSQL (ücretsiz plan); migration'lar EF Core migration bundle ile uygulanır.
+- **Gizli bilgiler:** Bağlantı dizesi ve JWT imza anahtarı App Service uygulama ayarlarında (ortam değişkeni) tutulur;
+  repoda yer almaz.
+- Kök `Dockerfile` aynı tek-uygulama paketini container olarak üretir (Container Apps, Kubernetes vb. için).
 
 ---
 
