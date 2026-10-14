@@ -90,7 +90,7 @@ docker compose down -v && docker compose up -d && dotnet ef database update --pr
 | 03 | [Katmanlı mimari, DTO](docs/03-katmanli-mimari.md) | ✅ |
 | 04 | [Validasyon ve hata yönetimi](docs/04-validasyon-hata-yonetimi.md) | ✅ |
 | 05 | [React + Vite + TypeScript](docs/05-react-vite-typescript.md) | ✅ |
-| 06 | Frontend ↔ Backend (CORS, TanStack Query) | ⏳ |
+| 06 | [Frontend ↔ Backend (CORS, TanStack Query)](docs/06-frontend-backend-baglantisi.md) | ✅ |
 | 07 | JWT kimlik doğrulama | ⏳ |
 | 08 | Kullanıcıya özel veri, filtreleme, sayfalama | ⏳ |
 | 09 | Test | ⏳ |

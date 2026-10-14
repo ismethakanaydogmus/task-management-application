@@ -3,7 +3,8 @@ import type { TaskFilter } from '../types/task';
 type FilterBarProps = {
   value: TaskFilter;
   onChange: (filter: TaskFilter) => void;
-  counts: Record<TaskFilter, number>;
+  // Veri henüz yüklenmediyse undefined: "0" göstermek "hiç görevin yok" diye yanlış anlaşılır.
+  counts?: Record<TaskFilter, number>;
 };
 
 const OPTIONS: { value: TaskFilter; label: string }[] = [
@@ -23,7 +24,7 @@ export function FilterBar({ value, onChange, counts }: FilterBarProps) {
           aria-pressed={option.value === value}
           onClick={() => onChange(option.value)}
         >
-          {option.label} <span className="count">{counts[option.value]}</span>
+          {option.label} {counts && <span className="count">{counts[option.value]}</span>}
         </button>
       ))}
     </div>

@@ -55,6 +55,29 @@ builder.Services.AddProblemDetails(options =>
 // Yakalanmayan exception'ları ProblemDetails'e çeviren sınıfımız.
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
+// CORS: Tarayıcının Same-Origin Policy'sine KONTROLLÜ bir istisna.
+// Frontend (localhost:5173) ile API (localhost:5263) farklı "origin" (şema + host + PORT) olduğu için
+// tarayıcı, API cevabını okumaya ancak API "bu origin'e izin veriyorum" derse izin verir.
+//
+// İzinli adresler KODDA DEĞİL configuration'da:
+//  - appsettings.Development.json → http://localhost:5173
+//  - Canlıda ortam değişkeni      → Cors__AllowedOrigins__0=https://gorevler.example.com
+// Liste boşsa hiçbir origin'e izin verilmez (güvenli varsayılan).
+//
+// AllowAnyOrigin() KULLANMIYORUZ: herhangi bir sitenin JavaScript'i API'mizi kullanıcı adına çağırabilirdi.
+// (Ayrıca AllowAnyOrigin, AllowCredentials ile birlikte kullanılamaz; çerez tabanlı oturumda zaten çalışmaz.)
+const string FrontendCorsPolicy = "Frontend";
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(FrontendCorsPolicy, policy => policy
+        .WithOrigins(allowedOrigins)
+        .AllowAnyHeader()                  // Content-Type, (Aşama 7'de) Authorization...
+        .AllowAnyMethod()                  // GET, POST, PUT, DELETE
+        .WithExposedHeaders("Location"));  // 201 cevabındaki Location header'ını JS okuyabilsin
+});
+
 // Her katman kendi servislerini kendi DependencyInjection.cs dosyasında kaydeder.
 // Api projesi (composition root) sadece hepsini bir araya getirir.
 builder.Services.AddApplication();                            // TaskService, validator'lar, TimeProvider
@@ -81,7 +104,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();   // http:// gelen isteği https://'e yönlendirir
-app.UseAuthorization();      // [Authorize] attribute'larını kontrol eder (Aşama 7'de anlam kazanacak)
+
+// CORS, routing'den sonra ve Authorization'dan ÖNCE gelmeli:
+// tarayıcının preflight (OPTIONS) isteğine, yetki kontrolüne takılmadan cevap verilebilmesi için.
+// Yanlış sırada olursa preflight 401/405 alır ve tarayıcı asıl isteği HİÇ göndermez.
+app.UseCors(FrontendCorsPolicy);
+
+app.UseAuthorization();     // [Authorize] attribute'larını kontrol eder (Aşama 7'de anlam kazanacak)
 app.MapControllers();        // URL'yi doğru controller action'ına eşler (routing)
 
 app.Run();

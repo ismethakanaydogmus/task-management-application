@@ -6,24 +6,26 @@ import { formatDateTime, isOverdue } from '../utils/date';
 // kendisi değiştirmez, üst component'e "şunu değiştir" diye HABER VERİR (onToggle, onDelete).
 type TaskItemProps = {
   task: TaskResponse;
-  onToggle: (id: number) => void;
+  onToggle: (task: TaskResponse) => void;
   onDelete: (id: number) => void;
+  busy: boolean; // bu görev için sunucuya giden bir istek sürüyor mu?
 };
 
 // "Sunumsal" (presentational) component: kendi state'i yok, sadece props'a göre çizer.
 // Aynı props → her zaman aynı görüntü. Test etmesi ve yeniden kullanması kolay.
-export function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
+export function TaskItem({ task, onToggle, onDelete, busy }: TaskItemProps) {
   const overdue = !task.isCompleted && isOverdue(task.dueDate);
 
   return (
     // className: HTML'deki "class" (class JavaScript'te ayrılmış bir kelime olduğu için)
-    // Şablon string ile koşullu sınıf: tamamlandıysa "done" sınıfı eklenir
-    <li className={`task-item ${task.isCompleted ? 'done' : ''}`}>
+    // Şablon string ile koşullu sınıf: tamamlandıysa "done", istek sürüyorsa "busy" sınıfı eklenir
+    <li className={`task-item ${task.isCompleted ? 'done' : ''} ${busy ? 'busy' : ''}`} aria-busy={busy}>
       <label className="task-check">
         <input
           type="checkbox"
           checked={task.isCompleted}
-          onChange={() => onToggle(task.id)}
+          disabled={busy}
+          onChange={() => onToggle(task)}
           aria-label={`${task.title} görevini ${task.isCompleted ? 'geri aç' : 'tamamla'}`}
         />
       </label>
@@ -54,6 +56,7 @@ export function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
       <button
         type="button"
         className="btn-icon"
+        disabled={busy}
         onClick={() => onDelete(task.id)}
         aria-label={`${task.title} görevini sil`}
         title="Sil"

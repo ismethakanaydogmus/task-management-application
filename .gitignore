@@ -491,3 +491,8 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Frontend ortam dosyaları gizli bilgi İÇEREMEZ (tarayıcıya gömülür), bu yüzden git'e girebilir.
+# Kişisel/yerel geçersiz kılmalar için .env.development.local kullan (o yine ignore edilir).
+!frontend/.env.development
+!frontend/.env.production
