@@ -1,0 +1,16 @@
+# Kök Dockerfile (tek container) için build bağlamından hariç tutulanlar.
+.git
+.github
+docs
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+**/bin
+**/obj
+**/.vs
+**/.vscode
+backend/tests
+**/*.http
+**/appsettings.Development.json

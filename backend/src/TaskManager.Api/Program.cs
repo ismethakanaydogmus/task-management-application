@@ -19,6 +19,7 @@ using TaskManager.Api.Auth;
 using TaskManager.Api.Controllers;
 using TaskManager.Application.Abstractions;
 using TaskManager.Api.ErrorHandling;
+using TaskManager.Api.Hosting;
 using TaskManager.Application;
 using TaskManager.Infrastructure;
 using TaskManager.Infrastructure.Auth;
@@ -204,6 +205,12 @@ app.UseExceptionHandler();
 // Böylece istemci HER hata yanıtında aynı formatı görür.
 app.UseStatusCodePages();
 
+// TEK CONTAINER (Azure): wwwroot'ta React build'i varsa API onu da sunar (statik dosyalar + güvenlik başlıkları).
+// Geliştirmede ve nginx'li compose kurulumunda wwwroot yok → bu satırlar devre dışı.
+var serveSpa = SpaHosting.IsEnabled(app.Environment);
+if (serveSpa)
+    app.UseSpaStaticFiles();
+
 if (app.Environment.IsDevelopment())
 {
     // API dokümanını sadece geliştirme ortamında açıyoruz:
@@ -232,6 +239,10 @@ app.MapControllers();        // URL'yi doğru controller action'ına eşler (rou
 // Health endpoint'leri giriş gerektirmez (fallback policy'den muaf); orkestratörün token'ı yok.
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = c => c.Tags.Contains("ready") }).AllowAnonymous();
+
+// En sonda: hiçbir endpoint'e uymayan adresler → index.html (SPA), bilinmeyen /api/* → 404.
+if (serveSpa)
+    app.MapSpaFallback();
 
 app.Run();
 
