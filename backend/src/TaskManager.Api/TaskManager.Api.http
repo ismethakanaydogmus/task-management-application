@@ -1,13 +1,44 @@
 # VS Code'da "REST Client" eklentisi veya Visual Studio / Rider ile her isteğin üstündeki
 # "Send Request" yazısına tıklayarak çalıştırabilirsin.
+#
+# SIRA: Önce "register" (ilk kez) veya "login" isteğini çalıştır. Dönen accessToken aşağıdaki
+# {{token}} değişkenine otomatik olarak alınır. Token 15 dakika geçerli; süresi dolunca tekrar login.
 
 @baseUrl = http://localhost:5263
+@email = deneme@ornek.com
+@password = deneme-sifre-123
+@token = {{login.response.body.accessToken}}
 
-### OpenAPI dokümanı (sadece Development ortamında açık)
+### OpenAPI dokümanı (sadece Development ortamında açık, giriş gerektirmez)
 GET {{baseUrl}}/openapi/v1.json
 
-### CREATE — yeni görev (201 Created beklenir)
+### ===================== KİMLİK DOĞRULAMA =====================
+
+### Kayıt (ilk seferde)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+### Giriş — dönen token {{token}} değişkenine alınır
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "{{email}}", "password": "{{password}}" }
+
+### Ben kimim?
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{token}}
+
+### Token olmadan → 401
+GET {{baseUrl}}/api/tasks
+
+### ===================== GÖREVLER =====================
+
+### CREATE — yeni görev (201)
 POST {{baseUrl}}/api/tasks
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -17,14 +48,25 @@ Content-Type: application/json
   "dueDate": "2026-10-20T18:00:00Z"
 }
 
-### READ — tüm görevler (200)
+### LİSTE — varsayılan: en yeni önce, sayfa 1, 20 kayıt
 GET {{baseUrl}}/api/tasks
+Authorization: Bearer {{token}}
 
-### READ — tek görev (200 veya 404)
+### LİSTE — filtre + arama + sıralama + sayfalama
+GET {{baseUrl}}/api/tasks?status=active&priority=High&search=market&sortBy=dueDate&sortDirection=asc&page=1&pageSize=10
+Authorization: Bearer {{token}}
+
+### ÖZET — { all, active, completed }
+GET {{baseUrl}}/api/tasks/summary
+Authorization: Bearer {{token}}
+
+### READ — tek görev (200, veya başkasınınsa/yoksa 404)
 GET {{baseUrl}}/api/tasks/1
+Authorization: Bearer {{token}}
 
 ### UPDATE — görevin tamamını değiştir (204 veya 404)
 PUT {{baseUrl}}/api/tasks/1
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -37,39 +79,31 @@ Content-Type: application/json
 
 ### DELETE — sil (204 veya 404)
 DELETE {{baseUrl}}/api/tasks/1
+Authorization: Bearer {{token}}
 
-### HATA ÖRNEKLERİ (hepsi ProblemDetails formatında döner) -------
+### ===================== HATA ÖRNEKLERİ (hepsi ProblemDetails) =====================
 
-### Birden fazla validasyon hatası aynı anda → 400 (FluentValidation)
-### boş başlık + tanımsız enum sayısı + saat dilimi olmayan tarih
+### Birden fazla validasyon hatası → 400
 POST {{baseUrl}}/api/tasks
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 { "title": "   ", "priority": 99, "dueDate": "2026-10-20T18:00:00" }
 
-### Saat dilimi +03:00 → kabul edilir, UTC'ye çevrilir (15:00Z)
-POST {{baseUrl}}/api/tasks
+### Whitelist dışı sıralama alanı → 400
+GET {{baseUrl}}/api/tasks?sortBy=passwordHash
+Authorization: Bearer {{token}}
+
+### Çok büyük sayfa → 400
+GET {{baseUrl}}/api/tasks?pageSize=1000
+Authorization: Bearer {{token}}
+
+### Yanlış şifre → 401 (olmayan e-postayla AYNI mesaj)
+POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
-{ "title": "İstanbul saatiyle", "dueDate": "2026-10-20T18:00:00+03:00" }
+{ "email": "{{email}}", "password": "yanlis-sifre" }
 
-### Geçersiz enum metni → 400 (model binding aşaması)
-POST {{baseUrl}}/api/tasks
-Content-Type: application/json
-
-{ "title": "Test", "priority": "CokYuksek" }
-
-### Bozuk JSON → 400
-POST {{baseUrl}}/api/tasks
-Content-Type: application/json
-
-{ "title": bozuk
-
-### Olmayan görev → 404 (NotFoundException)
-GET {{baseUrl}}/api/tasks/99999
-
-### Olmayan adres → 404 (UseStatusCodePages ile yine ProblemDetails)
+### Olmayan adres → 404
 GET {{baseUrl}}/api/olmayan-adres
-
-### id sayı değil → route constraint yüzünden 404
-GET {{baseUrl}}/api/tasks/abc
+Authorization: Bearer {{token}}

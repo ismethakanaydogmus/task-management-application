@@ -117,14 +117,18 @@ namespace TaskManager.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
                     b.HasKey("Id")
                         .HasName("pk_tasks");
 
-                    b.HasIndex("DueDate")
-                        .HasDatabaseName("ix_tasks_due_date");
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_tasks_user_id_created_at");
 
-                    b.HasIndex("IsCompleted")
-                        .HasDatabaseName("ix_tasks_is_completed");
+                    b.HasIndex("UserId", "DueDate")
+                        .HasDatabaseName("ix_tasks_user_id_due_date");
 
                     b.ToTable("tasks", (string)null);
                 });
@@ -174,6 +178,16 @@ namespace TaskManager.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_refresh_tokens_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TaskManager.Domain.Entities.TaskItem", b =>
+                {
+                    b.HasOne("TaskManager.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tasks_users_user_id");
                 });
 
             modelBuilder.Entity("TaskManager.Domain.Entities.User", b =>

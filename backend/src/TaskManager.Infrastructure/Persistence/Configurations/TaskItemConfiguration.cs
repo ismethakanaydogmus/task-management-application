@@ -28,13 +28,30 @@ public class TaskItemConfiguration : IEntityTypeConfiguration<TaskItem>
 
         // Enum'ı veritabanında sayı (2) yerine metin ("High") olarak sakla.
         // Artısı: SQL ile bakınca okunur; enum sırası değişirse eski veriler bozulmaz.
-        // Eksisi: biraz daha fazla yer kaplar. Bu ölçekte önemsiz.
+        // Eksisi: biraz daha fazla yer kaplar ve SIRALAMA alfabetik olur ("High" < "Low" < "Medium")!
+        // Aşama 8'de önceliğe göre sıralarken bunu CASE ifadesiyle çözüyoruz (EfTaskRepository).
         builder.Property(t => t.Priority)
             .HasConversion<string>()
             .HasMaxLength(20);
 
-        // Sık filtreleyeceğimiz alanlara index: "tamamlanmamış görevler" sorgusu tüm tabloyu taramasın.
-        builder.HasIndex(t => t.IsCompleted);
-        builder.HasIndex(t => t.DueDate);
+        // SAHİPLİK: Her görev bir kullanıcıya ait. Kullanıcı silinirse görevleri de silinir (CASCADE).
+        // Navigation property (TaskItem.User) eklemedik; sadece foreign key yeterli.
+        builder.HasOne<User>()
+            .WithMany()
+            .HasForeignKey(t => t.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // INDEX'LER (Aşama 8'de yeniden düzenlendi):
+        // Artık HER sorgu "WHERE user_id = @me" ile başlıyor. Bu yüzden index'ler user_id ile BAŞLAMALI.
+        //
+        // (user_id, created_at): varsayılan liste ("benim görevlerim, en yeniden eskiye") + sayfalama.
+        //   Composite index'te SIRA önemli: önce user_id ile daraltır, sonra created_at sırasıyla okur;
+        //   ayrıca sıralama (ORDER BY) yapmasına gerek kalmaz.
+        // (user_id, due_date): "son tarihe göre sırala".
+        //
+        // Aşama 2'deki tek başına is_completed index'i KALDIRILDI: boolean kolonun sadece 2 değeri var
+        // (düşük seçicilik); veritabanı zaten çoğu zaman bu index'i kullanmaz, ama her INSERT/UPDATE'te güncellemek zorunda kalır.
+        builder.HasIndex(t => new { t.UserId, t.CreatedAt });
+        builder.HasIndex(t => new { t.UserId, t.DueDate });
     }
 }

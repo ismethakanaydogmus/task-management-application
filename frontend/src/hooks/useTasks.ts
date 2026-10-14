@@ -1,50 +1,57 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createTask, deleteTask, getTasks, updateTask } from '../api/tasks';
-import type { CreateTaskRequest, TaskResponse, UpdateTaskRequest } from '../types/task';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { createTask, deleteTask, getTaskSummary, getTasks, updateTask } from '../api/tasks';
+import type { CreateTaskRequest, TaskQuery, TaskResponse, UpdateTaskRequest } from '../types/task';
 
-// SERVER STATE: Görev listesinin ASIL sahibi backend. Tarayıcıdaki sadece önbellekteki bir KOPYA.
-// Bu kopyanın ne zaman bayatladığını, ne zaman tekrar çekileceğini TanStack Query yönetir.
+// SERVER STATE: Görevlerin asıl sahibi backend; burada sadece önbellekteki kopyalar var.
 //
-// Neden useState + useEffect ile elle yazmadık?
-//   useEffect(() => { fetch(...).then(setTasks) }, [])
-// Bu basit görünür ama şunları SEN çözmek zorunda kalırsın:
-//  - loading / error state'leri          - aynı veriyi isteyen 3 component = 3 istek
-//  - component kapanınca gelen cevap     - hızlı tıklamada eski cevabın yenisini ezmesi (race condition)
-//  - ekleme sonrası listeyi yenilemek     - sekmeye dönünce veriyi tazelemek
-//  - StrictMode'da effect'in 2 kez çalışması → 2 istek
+// QUERY KEY HİYERARŞİSİ:
+//   ['tasks']                         ← kök: invalidate edilince ALTINDAKİ HER ŞEY bayatlar
+//   ['tasks', 'list', { ...query }]   ← her filtre/sayfa kombinasyonu AYRI önbellek girdisi
+//   ['tasks', 'summary']              ← filtre rozetlerindeki sayılar
+// "Aktif" filtresinden "Tümü"ne geçip geri dönünce "Aktif" listesi önbellekten ANINDA gelir.
+export const taskKeys = {
+  all: ['tasks'] as const,
+  list: (query: TaskQuery) => ['tasks', 'list', query] as const,
+  summary: ['tasks', 'summary'] as const,
+};
 
-// Query key: bu verinin önbellekteki "adresi". Hep aynı diziyi kullanmak için tek yerde tanımlı.
-// Aşama 8'de filtre/sayfa eklenince ['tasks', { page: 2, status: 'active' }] gibi genişleyecek.
-export const tasksQueryKey = ['tasks'] as const;
-
-export function useTasksQuery() {
+export function useTasksQuery(query: TaskQuery) {
   return useQuery({
-    queryKey: tasksQueryKey,
-    queryFn: ({ signal }) => getTasks(signal),
+    queryKey: taskKeys.list(query),
+    queryFn: ({ signal }) => getTasks(query, signal),
+    // Sayfa/filtre değişince YENİ veri gelene kadar ÖNCEKİ listeyi göster (isPlaceholderData = true).
+    // Bu olmasaydı her sayfa geçişinde liste bir anlığına kaybolup "Yükleniyor…" yazardı (titreme).
+    placeholderData: keepPreviousData,
   });
 }
 
-// MUTATION: sunucudaki veriyi DEĞİŞTİREN işlemler (POST/PUT/DELETE).
-// Başarılı olunca "görev listesi artık bayat" deyip (invalidate) TanStack Query'nin yeniden çekmesini sağlıyoruz.
-//
-// Neden kendimiz önbelleğe ekleyip geçmiyoruz da tekrar çekiyoruz?
-// Backend'in döndüreceği gerçek hali (id, createdAt, completedAt...) en doğru kaynak backend'dir.
-// Aşama 5'te frontend'de kopyaladığımız "CompletedAt" iş kuralı bu sayede SİLİNDİ:
-// frontend artık kural uygulamıyor, sadece backend'in söylediğini gösteriyor.
+export function useTaskSummary() {
+  return useQuery({
+    queryKey: taskKeys.summary,
+    queryFn: ({ signal }) => getTaskSummary(signal),
+  });
+}
+
+// Bir görev eklendi/değişti/silindi → hem listeler hem özet bayatladı.
+// Kök anahtarı ['tasks'] invalidate etmek ikisini de kapsar; ekranda olan sorgular hemen yeniden çekilir,
+// olmayanlar (başka filtrelerin önbelleği) bir dahaki kullanımda çekilir.
+function useInvalidateTasks() {
+  const queryClient = useQueryClient();
+  return () => queryClient.invalidateQueries({ queryKey: taskKeys.all });
+}
 
 export function useCreateTask() {
-  const queryClient = useQueryClient();
+  const invalidate = useInvalidateTasks();
   return useMutation({
     mutationFn: (request: CreateTaskRequest) => createTask(request),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksQueryKey }),
+    onSuccess: invalidate,
   });
 }
 
 export function useToggleTask() {
-  const queryClient = useQueryClient();
+  const invalidate = useInvalidateTasks();
   return useMutation({
     // PUT kaynağın TAMAMINI ister: mevcut görevin tüm alanlarını gönderip sadece isCompleted'ı çeviriyoruz.
-    // (Bir PATCH /complete endpoint'i olsaydı sadece id göndermek yeterdi.)
     mutationFn: (task: TaskResponse) => {
       const request: UpdateTaskRequest = {
         title: task.title,
@@ -55,14 +62,14 @@ export function useToggleTask() {
       };
       return updateTask(task.id, request);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksQueryKey }),
+    onSuccess: invalidate,
   });
 }
 
 export function useDeleteTask() {
-  const queryClient = useQueryClient();
+  const invalidate = useInvalidateTasks();
   return useMutation({
     mutationFn: (id: number) => deleteTask(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: tasksQueryKey }),
+    onSuccess: invalidate,
   });
 }

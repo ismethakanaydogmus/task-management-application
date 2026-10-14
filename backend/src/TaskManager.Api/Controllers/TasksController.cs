@@ -1,29 +1,33 @@
 using Microsoft.AspNetCore.Mvc;
+using TaskManager.Application.Common;
 using TaskManager.Application.Tasks;
 
 namespace TaskManager.Api.Controllers;
 
 // Controller'ın TEK görevi HTTP'yi konuşmak: isteği al → service'i çağır → başarılı sonucu HTTP'ye çevir.
 //
-// Aşama 3'e göre fark: if/else yok.
-//  - Validasyon hatası → service ValidationException fırlatır → GlobalExceptionHandler → 400
-//  - Kayıt yok         → service NotFoundException fırlatır  → GlobalExceptionHandler → 404
-// Controller sadece "mutlu yolu" (happy path) bilir.
-//
-// [ProducesResponseType]: OpenAPI dokümanında hangi durum kodlarının dönebileceğini belgeler.
-// Frontend geliştiricisi (veya otomatik client üreten araçlar) neyle karşılaşacağını bilir.
+// Kimlik: Bu controller'da [Authorize] YOK ama korumalı → Program.cs'teki fallback policy (Aşama 7).
+// Sahiplik: Hiçbir action userId almıyor/geçirmiyor → TaskService, ICurrentUser'dan alıyor (Aşama 8).
+//   Başkasının görevi → service NotFoundException → 404.
 [ApiController]
 [Route("api/tasks")]
 [Produces("application/json")]
 public class TasksController(ITaskService taskService) : ControllerBase
 {
-    // CancellationToken: ASP.NET Core bunu otomatik olarak HttpContext.RequestAborted'a bağlar.
-
-    // GET /api/tasks
+    // GET /api/tasks?status=active&priority=High&search=market&sortBy=dueDate&sortDirection=asc&page=1&pageSize=20
+    // [FromQuery]: TaskQuery'nin alanları query string'den doldurulur. Enum'lar büyük/küçük harf duyarsız ("active" = "Active").
     [HttpGet]
-    [ProducesResponseType<IReadOnlyList<TaskResponse>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<TaskResponse>>> GetAll(CancellationToken ct)
-        => Ok(await taskService.GetAllAsync(ct));
+    [ProducesResponseType<PagedResult<TaskResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PagedResult<TaskResponse>>> GetPaged([FromQuery] TaskQuery query, CancellationToken ct)
+        => Ok(await taskService.GetPagedAsync(query, ct));
+
+    // GET /api/tasks/summary → { all, active, completed } (filtre rozetleri için; sayfalamadan bağımsız)
+    // Dikkat: "summary" metni "{id:int}" route'uyla çakışmaz çünkü int constraint'i var.
+    [HttpGet("summary")]
+    [ProducesResponseType<TaskSummary>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<TaskSummary>> GetSummary(CancellationToken ct)
+        => Ok(await taskService.GetSummaryAsync(ct));
 
     // GET /api/tasks/5
     [HttpGet("{id:int}", Name = nameof(GetById))]

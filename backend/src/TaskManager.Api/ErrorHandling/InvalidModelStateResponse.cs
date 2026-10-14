@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
@@ -40,16 +41,20 @@ internal static class InvalidModelStateResponse
     }
 
     // "$.priority" → "priority",  "$" veya action parametre adı ("request") → "body"
+    // Query string hataları C# property adıyla gelir ("SortBy") → camelCase ("sortBy"): JSON alan adlarıyla
+    // ve FluentValidation hatalarıyla (GlobalExceptionHandler'da da camelCase yapılıyor) tutarlı olsun.
     private static string NormalizeKey(string key)
     {
         if (key.StartsWith("$.", StringComparison.Ordinal))
-            return key[2..];
+            key = key[2..];
 
-        return key is "$" or "" or "request" ? "body" : key;
+        return key is "$" or "" or "request" ? "body" : JsonNamingPolicy.CamelCase.ConvertName(key);
     }
 
+    // Gövdenin tamamıyla ilgili hata ("$", boş anahtar, action parametresi) → gövde mesajı.
+    // Belirli bir alan (JSON'da "$.priority", query string'de "status") → alan mesajı.
     private static string ToFriendlyMessage(string key) =>
-        key.StartsWith("$.", StringComparison.Ordinal)
-            ? "Geçersiz değer veya format."
-            : "İstek gövdesi boş veya geçerli bir JSON değil.";
+        NormalizeKey(key) == "body"
+            ? "İstek gövdesi boş veya geçerli bir JSON değil."
+            : "Geçersiz değer veya format.";
 }

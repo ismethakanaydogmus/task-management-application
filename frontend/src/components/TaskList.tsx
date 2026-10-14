@@ -6,12 +6,13 @@ type TaskListProps = {
   onToggle: (task: TaskResponse) => void;
   onDelete: (id: number) => void;
   busyTaskId: number | null; // hangi görev için istek sürüyor
+  emptyMessage?: string; // filtre varken "eşleşen yok", yokken "henüz görev yok"
 };
 
-export function TaskList({ tasks, onToggle, onDelete, busyTaskId }: TaskListProps) {
+export function TaskList({ tasks, onToggle, onDelete, busyTaskId, emptyMessage }: TaskListProps) {
   // "Empty state": liste boşken kullanıcıya boş bir ekran yerine ne yapacağını söyle.
   if (tasks.length === 0) {
-    return <p className="empty">Burada görev yok. Yukarıdan yeni bir görev ekleyebilirsin.</p>;
+    return <p className="empty">{emptyMessage ?? 'Burada görev yok. Yukarıdan yeni bir görev ekleyebilirsin.'}</p>;
   }
 
   return (

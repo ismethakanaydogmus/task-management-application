@@ -1,5 +1,6 @@
 using FluentValidation;
 using TaskManager.Application.Abstractions;
+using TaskManager.Application.Common;
 using TaskManager.Application.Common.Exceptions;
 using TaskManager.Domain.Entities;
 
@@ -13,17 +14,29 @@ namespace TaskManager.Application.Tasks;
 // geçersiz veri içeri GİREMEZ. Controller'da olsaydı, başka bir çağıran validasyonu atlayabilirdi.
 //
 // TimeProvider: DateTime.UtcNow yerine enjekte edilen saat → testte zamanı kontrol edebilmek için.
+// ICurrentUser: "Bu isteği kim yapıyor?" — her okuma/yazma bu kullanıcıyla sınırlı (Aşama 8).
 internal sealed class TaskService(
     ITaskRepository repository,
+    ICurrentUser currentUser,
     TimeProvider clock,
     IValidator<CreateTaskRequest> createValidator,
-    IValidator<UpdateTaskRequest> updateValidator) : ITaskService
+    IValidator<UpdateTaskRequest> updateValidator,
+    IValidator<TaskQuery> queryValidator) : ITaskService
 {
-    public async Task<IReadOnlyList<TaskResponse>> GetAllAsync(CancellationToken ct = default)
+    public async Task<PagedResult<TaskResponse>> GetPagedAsync(TaskQuery query, CancellationToken ct = default)
     {
-        var tasks = await repository.GetAllAsync(ct);
-        return tasks.Select(t => t.ToResponse()).ToList();
+        await queryValidator.ValidateAndThrowAsync(query, ct);
+
+        var (items, totalCount) = await repository.GetPagedAsync(currentUser.UserId, query, ct);
+        return new PagedResult<TaskResponse>(
+            items.Select(t => t.ToResponse()).ToList(),
+            query.Page,
+            query.PageSize,
+            totalCount);
     }
+
+    public Task<TaskSummary> GetSummaryAsync(CancellationToken ct = default)
+        => repository.GetSummaryAsync(currentUser.UserId, ct);
 
     public async Task<TaskResponse> GetByIdAsync(int id, CancellationToken ct = default)
     {
@@ -38,6 +51,9 @@ internal sealed class TaskService(
 
         var task = new TaskItem
         {
+            // Sahip HER ZAMAN token'daki kullanıcı. İstek gövdesinde "userId" alanı YOK (DTO'da tanımlı değil),
+            // yani istemci başkası adına görev oluşturamaz (over-posting koruması, Aşama 1).
+            UserId = currentUser.UserId,
             Title = request.Title.Trim(),
             Description = request.Description?.Trim(),
             Priority = request.Priority,
@@ -77,11 +93,13 @@ internal sealed class TaskService(
 
     public async Task DeleteAsync(int id, CancellationToken ct = default)
     {
-        var deleted = await repository.DeleteAsync(id, ct);
+        var deleted = await repository.DeleteAsync(id, currentUser.UserId, ct);
         if (!deleted)
             throw new NotFoundException("Görev", id);
     }
 
+    // Görev yoksa DA, başkasına aitse DE aynı NotFoundException → 404.
+    // 403 ("var ama senin değil") dönseydik saldırgan id'leri deneyerek hangi görevlerin VAR olduğunu öğrenirdi.
     private async Task<TaskItem> GetTaskOrThrowAsync(int id, CancellationToken ct)
-        => await repository.GetByIdAsync(id, ct) ?? throw new NotFoundException("Görev", id);
+        => await repository.GetByIdAsync(id, currentUser.UserId, ct) ?? throw new NotFoundException("Görev", id);
 }

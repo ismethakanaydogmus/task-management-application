@@ -96,6 +96,6 @@ docker compose down -v && docker compose up -d && dotnet ef database update --pr
 | 05 | [React + Vite + TypeScript](docs/05-react-vite-typescript.md) | ✅ |
 | 06 | [Frontend ↔ Backend (CORS, TanStack Query)](docs/06-frontend-backend-baglantisi.md) | ✅ |
 | 07 | [JWT kimlik doğrulama](docs/07-jwt-kimlik-dogrulama.md) | ✅ |
-| 08 | Kullanıcıya özel veri, filtreleme, sayfalama | ⏳ |
+| 08 | [Kullanıcıya özel veri, filtreleme, sayfalama](docs/08-kullaniciya-ozel-veri-sayfalama.md) | ✅ |
 | 09 | Test | ⏳ |
 | 10 | Docker ve deploy | ⏳ |

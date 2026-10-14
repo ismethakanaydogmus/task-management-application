@@ -291,6 +291,56 @@ button {
   margin: 0;
 }
 
+/* ---------- Aşama 8: araç çubuğu / sayfalama ---------- */
+.toolbar {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1.4fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 620px) {
+  .toolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .toolbar-search {
+    grid-column: 1 / -1;
+  }
+}
+
+.stale {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.pagination-info,
+.pagination-page {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagination-buttons .btn-secondary {
+  margin-top: 0;
+  padding: 6px 12px;
+}
+
 /* ---------- Aşama 7: giriş / kullanıcı menüsü ---------- */
 .auth-container {
   max-width: 440px;

@@ -12,7 +12,9 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
+using TaskManager.Api.Auth;
 using TaskManager.Api.Controllers;
+using TaskManager.Application.Abstractions;
 using TaskManager.Api.ErrorHandling;
 using TaskManager.Application;
 using TaskManager.Infrastructure;
@@ -91,6 +93,11 @@ builder.Services.AddCors(options =>
 // Api projesi (composition root) sadece hepsini bir araya getirir.
 builder.Services.AddApplication();                            // TaskService, AuthService, validator'lar, TimeProvider
 builder.Services.AddInfrastructure(builder.Configuration);    // AppDbContext, repository'ler, JWT, şifre hash'leme
+
+// "Bu isteği kim yapıyor?" → token'daki "sub" claim'i. Scoped: her HTTP isteği kendi kullanıcısını görür.
+// (Singleton olsaydı... IHttpContextAccessor yine doğru isteği verirdi, ama Scoped niyeti daha açık ifade ediyor.)
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
 
 // ---------- AUTHENTICATION (Sen kimsin?) ----------
 // JwtBearer: her istekte "Authorization: Bearer <token>" başlığını okur, imzayı/süreyi/issuer'ı doğrular,

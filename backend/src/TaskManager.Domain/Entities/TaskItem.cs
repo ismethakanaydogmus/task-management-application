@@ -9,6 +9,10 @@ public class TaskItem
 {
     public int Id { get; set; }
 
+    // Görevin SAHİBİ. Her sorgu bu alana göre filtrelenir ("AND user_id = <giriş yapan>").
+    // Unutulursa: bir kullanıcı URL'deki id'yi değiştirerek başkasının görevine erişir (IDOR).
+    public int UserId { get; set; }
+
     // "required": nesne oluşturulurken Title verilmek ZORUNDA (derleme zamanında kontrol edilir).
     public required string Title { get; set; }
 

@@ -52,5 +52,34 @@ export type UpdateTaskRequest = {
   dueDate: string | null;
 };
 
-// Liste filtresi (sadece frontend'de var, backend'de karşılığı yok)
+// ↔ C#: enum TaskStatusFilter (backend enum'ları query string'de büyük/küçük harf duyarsız okur)
 export type TaskFilter = 'all' | 'active' | 'completed';
+
+// ↔ C#: enum TaskSortField / SortDirection
+export type TaskSortField = 'createdAt' | 'dueDate' | 'priority' | 'title';
+export type SortDirection = 'asc' | 'desc';
+
+// ↔ C#: record TaskQuery — GET /api/tasks?status=...&page=...
+export type TaskQuery = {
+  status: TaskFilter;
+  priority: TaskPriority | null;
+  search: string;
+  sortBy: TaskSortField;
+  sortDirection: SortDirection;
+  page: number;
+  pageSize: number;
+};
+
+// ↔ C#: record PagedResult<T>
+export type PagedResult<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+};
+
+// ↔ C#: record TaskSummary — GET /api/tasks/summary
+export type TaskSummary = Record<TaskFilter, number>;
